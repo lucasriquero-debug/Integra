@@ -1632,7 +1632,15 @@ function closeModal(id){document.getElementById(id).classList.remove('show');}
 // ══════════════════════════════════════════════
 // PWA + SERVICE WORKER
 // ══════════════════════════════════════════════
-if('serviceWorker' in navigator)navigator.serviceWorker.register('/Integra/sw.js').catch(()=>{});
+// Desinstalar cualquier Service Worker previo que pueda cachear versiones viejas
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(regs=>{
+    regs.forEach(reg=>reg.unregister());
+  });
+  caches.keys().then(keys=>{
+    keys.forEach(key=>caches.delete(key));
+  });
+}
 
 // ══════════════════════════════════════════════
 // INIT — cargar Firebase y arrancar
