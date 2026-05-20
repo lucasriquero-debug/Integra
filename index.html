@@ -303,7 +303,7 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
       <div class="form-group"><label class="form-label">Estado</label><select class="form-input" id="caso-estado"><option value="nuevo">Nuevo</option><option value="proceso">En proceso</option><option value="urgente">Urgente</option><option value="espera">En espera</option></select></div>
       <div class="form-group"><label class="form-label">Fecha límite</label><input class="form-input" type="date" id="caso-fecha"></div>
     </div>
-    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="caso-notas" placeholder="Observaciones..."></div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="caso-notas" placeholder="Ej: Con publicación edictos, Urgente, Con deuda..."></div>
     <div class="form-group">
       <label class="form-label">Trámites — marcá los que aplican</label>
       <div class="preset-list" id="preset-checks"></div>
@@ -379,7 +379,7 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
         </select>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="mt-notas" placeholder="Observaciones..."></div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="mt-notas" placeholder="Ej: Con publicación edictos, Urgente, Con deuda..."></div>
     <div class="form-actions">
       <button class="btn-sec" onclick="closeModal('modal-tramite')">Cancelar</button>
       <button class="btn-full" onclick="saveTramite()">Guardar</button>
@@ -402,7 +402,7 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
     </div>
     <div class="form-group"><label class="form-label">Dirección</label><input class="form-input" id="cli-dir" placeholder="Calle, número, localidad..."></div>
     <div class="form-group"><label class="form-label">CUIT / DNI</label><input class="form-input" id="cli-cuit" placeholder="20-12345678-9"></div>
-    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="cli-notas" placeholder="Observaciones..."></div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="cli-notas" placeholder="Ej: Con publicación edictos, Urgente, Con deuda..."></div>
     <div class="form-actions">
       <button class="btn-sec" onclick="closeModal('modal-cliente')">Cancelar</button>
       <button class="btn-full" id="cli-save-btn" onclick="saveCliente()">Guardar cliente</button>
@@ -573,13 +573,21 @@ async function loadFromFirestore(){
       if(d.usuarios)usuarios=d.usuarios;
       if(d.profesionales)profesionales=d.profesionales;
       if(d.presetsTramites)presetsTramites=d.presetsTramites;
-      if(d.cases)cases=d.cases;
+      if(d.cases){cases=d.cases;migrarCasos();}
       if(d.clientes)clientes=d.clientes;
       sv('gp_data',{cases,clientes,usuarios,profesionales,presetsTramites,notificaciones});
     }
   }catch(e){
     console.warn('Sin conexión, usando datos locales:',e);
   }
+}
+// Migrar casos viejos que no tienen campo nombre
+function migrarCasos(){
+  let changed=false;
+  cases.forEach(c=>{
+    if(!c.nombre){c.nombre=c.cliente;changed=true;}
+  });
+  if(changed)scheduleSave();
 }
 
 // Escuchar cambios en tiempo real de otros dispositivos
@@ -699,6 +707,7 @@ let activeTab = 'home';
 let detailCaseId = null;
 let customPresets = [];
 let editingTramite = null;
+let casosFiltro = {texto:'', estado:'', profId:'', tramite:''};
 let editingClienteId = null;
 let editingUsuarioId = null;
 
@@ -988,17 +997,96 @@ function renderHome(){
 // ══════════════════════════════════════════════
 // CASOS
 // ══════════════════════════════════════════════
+function filtrarCasos(vc){
+  let result=[...vc];
+  const txt=casosFiltro.texto.toLowerCase().trim();
+  if(txt) result=result.filter(c=>
+    (c.nombre||c.cliente).toLowerCase().includes(txt)||
+    (c.notas||'').toLowerCase().includes(txt)||
+    c.tramites.some(t=>t.name.toLowerCase().includes(txt))||
+    getProf(c.profId).nombre.toLowerCase().includes(txt)||
+    getUser(c.empleadoId).nombre.toLowerCase().includes(txt)
+  );
+  if(casosFiltro.estado) result=result.filter(c=>c.estado===casosFiltro.estado);
+  if(casosFiltro.profId) result=result.filter(c=>c.profId===parseInt(casosFiltro.profId));
+  if(casosFiltro.tramite) result=result.filter(c=>c.tramites.some(t=>t.aplica&&t.name.toLowerCase().includes(casosFiltro.tramite.toLowerCase())));
+  return result;
+}
+
 function renderCasos(){
   const vc=visibleCases();
+  const filtered=filtrarCasos(vc);
   let h=`<div class="pad">`;
-  if(!vc.length){h+=`<div class="empty"><i class="ti ti-briefcase"></i>Sin casos asignados.</div></div>`;document.getElementById('content').innerHTML=h;return;}
-  h+=`<div class="card">`;
-  vc.forEach(c=>{
-    const p=prog(c),d=dleft(c.fecha),pr=getProf(c.profId);
-    const revC=c.tramites.filter(t=>needsRevision(t)).length;
-    h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${caseTitulo(c)}${revC?` <span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:1px 6px;border-radius:20px;margin-left:4px"><i class="ti ti-bell" style="font-size:9px"></i> ${revC}</span>`:''}</div><div class="rs">${caseSubline(c)}</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}</div></div>`;
-  });
-  h+=`</div></div>`;document.getElementById('content').innerHTML=h;
+
+  // Barra de búsqueda
+  h+=`<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+    <div style="position:relative;flex:1">
+      <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px"></i>
+      <input value="${casosFiltro.texto}" oninput="casosFiltro.texto=this.value;renderCasos()" placeholder="Buscar por nombre, trámite, tipo de caso..." style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 10px 9px 34px;font-size:13px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none">
+    </div>
+    <button onclick="toggleFiltros()" id="filtro-btn" style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;cursor:pointer;color:${(casosFiltro.estado||casosFiltro.profId||casosFiltro.tramite)?'var(--green-text)':'var(--text2)'};font-size:15px;display:flex;align-items:center;gap:4px;white-space:nowrap">
+      <i class="ti ti-adjustments-horizontal"></i>
+      ${(casosFiltro.estado||casosFiltro.profId||casosFiltro.tramite)?'<span style="font-size:11px">Activo</span>':''}
+    </button>
+  </div>`;
+
+  // Panel de filtros (colapsable)
+  h+=`<div id="filtros-panel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Estado</div>
+        <select onchange="casosFiltro.estado=this.value;renderCasos()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Todos</option>
+          <option value="nuevo" ${casosFiltro.estado==='nuevo'?'selected':''}>Nuevo</option>
+          <option value="proceso" ${casosFiltro.estado==='proceso'?'selected':''}>En proceso</option>
+          <option value="espera" ${casosFiltro.estado==='espera'?'selected':''}>En espera</option>
+          <option value="urgente" ${casosFiltro.estado==='urgente'?'selected':''}>Urgente</option>
+          <option value="listo" ${casosFiltro.estado==='listo'?'selected':''}>Completado</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Profesional</div>
+        <select onchange="casosFiltro.profId=this.value;renderCasos()" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif">
+          <option value="">Todos</option>
+          ${profesionales.map(p=>`<option value="${p.id}" ${casosFiltro.profId==p.id?'selected':''}>${p.nombre}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Tipo de trámite</div>
+      <input value="${casosFiltro.tramite}" oninput="casosFiltro.tramite=this.value;renderCasos()" placeholder="Ej: expediente, planos, catastral..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none">
+    </div>
+    <button onclick="casosFiltro={texto:casosFiltro.texto,estado:'',profId:'',tramite:''};renderCasos()" style="margin-top:8px;background:none;border:none;font-size:12px;color:var(--text3);cursor:pointer;font-family:'DM Sans',sans-serif">✕ Limpiar filtros</button>
+  </div>`;
+
+  // Contador de resultados
+  if(casosFiltro.texto||casosFiltro.estado||casosFiltro.profId||casosFiltro.tramite){
+    h+=`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">${filtered.length} resultado${filtered.length!==1?'s':''} de ${vc.length} casos</div>`;
+  }
+
+  if(!filtered.length){
+    h+=`<div class="empty"><i class="ti ti-search"></i>${vc.length?'Sin resultados para esa búsqueda':'Sin casos asignados.'}</div>`;
+  } else {
+    h+=`<div class="card">`;
+    filtered.forEach(c=>{
+      const p=prog(c),d=dleft(c.fecha),pr=getProf(c.profId);
+      const revC=c.tramites.filter(t=>needsRevision(t)).length;
+      h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${caseTitulo(c)}${revC?` <span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:1px 6px;border-radius:20px;margin-left:4px"><i class="ti ti-bell" style="font-size:9px"></i> ${revC}</span>`:''}</div><div class="rs">${caseSubline(c)}</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}</div></div>`;
+    });
+    h+=`</div>`;
+  }
+  h+=`</div>`;
+  document.getElementById('content').innerHTML=h;
+
+  // Restaurar estado del panel de filtros
+  const fp=document.getElementById('filtros-panel');
+  if(fp&&filtrosPanelAbierto)fp.style.display='block';
+}
+
+let filtrosPanelAbierto=false;
+function toggleFiltros(){
+  filtrosPanelAbierto=!filtrosPanelAbierto;
+  renderCasos();
 }
 
 // ══════════════════════════════════════════════
