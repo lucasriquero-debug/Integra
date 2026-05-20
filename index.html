@@ -4,9 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GestorPro">
+<meta name="application-name" content="GestorPro">
 <meta name="theme-color" content="#1D9E75">
+<meta name="msapplication-TileColor" content="#1D9E75">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="apple-touch-startup-image" href="icons/icon-512.png">
 <link rel="manifest" href="manifest.json"><base href="/Integra/">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
@@ -192,6 +197,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .custom-add-row button{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:12px;color:var(--text2);font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap}
 .emp-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
 .color-opt{transition:opacity .15s}
+textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
 .spinner{width:24px;height:24px;border:2.5px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .user-menu{display:none;position:fixed;top:54px;right:12px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:6px;z-index:150;min-width:200px}
@@ -483,6 +489,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   </div>
 </div>
 
+<!-- MODAL NOVEDAD -->
+<div class="modal-overlay" id="modal-novedad" onclick="if(event.target===this)closeModal('modal-novedad')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="novedad-title">Nueva novedad <button class="modal-close" onclick="closeModal('modal-novedad')"><i class="ti ti-x"></i></button></div>
+    <div id="novedades-historial" style="max-height:220px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:6px"></div>
+    <div class="form-group">
+      <label class="form-label">Escribí la novedad</label>
+      <textarea class="form-input" id="novedad-texto" rows="3" placeholder="Ej: Se presentó el expediente, está en mesa de entrada..." style="resize:none;line-height:1.5"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn-sec" onclick="closeModal('modal-novedad')">Cancelar</button>
+      <button class="btn-full" onclick="guardarNovedad()">Agregar novedad</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase SDKs (compat version - expone funciones globalmente) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -712,11 +735,17 @@ function getProf(id){return profesionales.find(p=>p.id===id)||{nombre:'?',icon:'
 function getUser(id){return usuarios.find(u=>u.id===id)||{nombre:'?',cbg:'#222',ctx:'#888'};}
 function elabel(e){return{nuevo:'Nuevo',proceso:'En proceso',espera:'En espera',listo:'Completado',urgente:'Urgente'}[e]||e;}
 function freqLabel(f){return({1:'Diaria',2:'Cada 2d',3:'Cada 3d',7:'Semanal',14:'Quincenal'}[f]||`Cada ${f}d`);}
-// Línea secundaria de un caso: tipos de trámite aplicables · profesional
-function caseSubline(cas){
+// Título principal del caso: nombre - profesional (notas)
+function caseTitulo(cas){
   const pr=getProf(cas.profId);
-  const tiposTramite=cas.tramites.filter(t=>t.aplica).map(t=>t.name).join(', ')||'Sin trámites';
-  return `${tiposTramite} · ${pr.nombre}`;
+  const nota=cas.notas?` <span style="font-size:11px;color:var(--text3);font-weight:400">(${cas.notas})</span>`:'';
+  return `${cas.cliente} <span style="font-weight:400;color:var(--text2)">— ${pr.nombre}</span>${nota}`;
+}
+// Línea secundaria: trámites aplicables
+function caseSubline(cas){
+  const tramites=cas.tramites.filter(t=>t.aplica).map(t=>t.name).join(' · ')||'Sin trámites';
+  const emp=getUser(cas.empleadoId);
+  return `${tramites}`;
 }
 
 function prog(c){
@@ -932,7 +961,7 @@ function renderHome(){
   else pend.slice(0,5).forEach(c=>{
     const d=dleft(c.fecha),p=prog(c),revC=c.tramites.filter(t=>needsRevision(t)).length;
     const pr=getProf(c.profId);
-    h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${c.cliente}${revC?` <span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:1px 6px;border-radius:20px;margin-left:4px"><i class="ti ti-bell" style="font-size:9px"></i> ${revC}</span>`:''}</div><div class="rs">${caseSubline(c)}</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}</div></div>`;
+    h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${caseTitulo(c)}${revC?` <span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:1px 6px;border-radius:20px;margin-left:4px"><i class="ti ti-bell" style="font-size:9px"></i> ${revC}</span>`:''}</div><div class="rs">${caseSubline(c)}</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}</div></div>`;
   });
   h+=`</div>`;
   if(currentUser.rol==='admin'){
@@ -959,7 +988,7 @@ function renderCasos(){
   vc.forEach(c=>{
     const p=prog(c),d=dleft(c.fecha),pr=getProf(c.profId);
     const revC=c.tramites.filter(t=>needsRevision(t)).length;
-    h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${c.cliente}${revC?` <span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:1px 6px;border-radius:20px;margin-left:4px"><i class="ti ti-bell" style="font-size:9px"></i> ${revC}</span>`:''}</div><div class="rs">${caseSubline(c)}</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}</div></div>`;
+    h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${caseTitulo(c)}${revC?` <span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:1px 6px;border-radius:20px;margin-left:4px"><i class="ti ti-bell" style="font-size:9px"></i> ${revC}</span>`:''}</div><div class="rs">${caseSubline(c)}</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}</div></div>`;
   });
   h+=`</div></div>`;document.getElementById('content').innerHTML=h;
 }
@@ -1013,7 +1042,7 @@ function renderUrgentes(){
   }
   if(urg.length){
     h+=`<div class="section-label">Vencimientos urgentes</div><div class="card">`;
-    urg.forEach(c=>{const d=dleft(c.fecha),p=prog(c),pr=getProf(c.profId);h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${c.cliente}</div><div class="rs">${getUser(c.empleadoId).nombre} · ${p}%</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}<span class="pill p-${c.estado}" style="margin-top:3px;display:inline-block">${elabel(c.estado)}</span></div></div>`;});
+    urg.forEach(c=>{const d=dleft(c.fecha),p=prog(c),pr=getProf(c.profId);h+=`<div class="row" onclick="openDetail(${c.id})"><div class="ci ci-${pr.colorClass}"><i class="ti ${pr.icon}"></i></div><div class="ri"><div class="rn">${caseTitulo(c)}</div><div class="rs">${getUser(c.empleadoId).nombre} · ${p}%</div><div class="rprog"><div class="rprog-fill" style="width:${p}%"></div></div></div><div class="rr">${dH(d)}<span class="pill p-${c.estado}" style="margin-top:3px;display:inline-block">${elabel(c.estado)}</span></div></div>`;});
     h+=`</div>`;
   }
   if(!urg.length&&!revToday.length)h+=`<div class="empty"><i class="ti ti-circle-check" style="color:var(--green-text);opacity:1"></i>Sin urgencias ni revisiones pendientes 🎉</div>`;
@@ -1134,14 +1163,13 @@ function renderDetail(){
   const canOK=isAdmin||currentUser.perms?.okTramites!==false;
 
   let h=`<div class="detail-header"><button class="detail-back" onclick="backToList()"><i class="ti ti-arrow-left"></i></button><div style="flex:1;min-width:0">
-    <div class="detail-title">${c.cliente}</div>
+    <div class="detail-title">${c.cliente} <span style="font-size:13px;font-weight:400;color:var(--text2)">— ${getProf(c.profId).nombre}</span>${c.notas?`<div style="font-size:11px;color:var(--text3);margin-top:2px">(${c.notas})</div>`:''}</div>
     <div class="detail-meta">
       <span><div class="emp-av" style="background:${emp.cbg};color:${emp.ctx};width:16px;height:16px;font-size:8px;display:inline-flex;vertical-align:middle;margin-right:3px">${ini(emp.nombre)}</div>${emp.nombre}</span>
       <span><i class="ti ti-calendar" style="font-size:11px"></i> ${c.fecha}</span>
       <span class="pill p-${c.estado}">${elabel(c.estado)}</span>
       ${revC?`<span style="font-size:10px;background:var(--amber-dim);color:var(--amber-text);padding:2px 8px;border-radius:20px;font-weight:500"><i class="ti ti-bell" style="font-size:9px"></i> ${revC} para revisar</span>`:''}
     </div>
-    ${c.notas?`<div style="font-size:11px;color:var(--text3);margin-top:3px">${c.notas}</div>`:''}
   </div>
   ${canEdit?`<button class="btn-icon" onclick="openEditCaso(${c.id})" style="flex-shrink:0;margin-left:4px" title="Editar caso"><i class="ti ti-pencil"></i></button>`:''}</div>`;
 
@@ -1174,10 +1202,12 @@ function renderDetail(){
       <div class="tr-body">
         <div class="tr-name${t.aplica?'':' struck'}">${t.name}${t.nota?`<span class="tr-note-tag">${t.nota}</span>`:''}</div>
         <div class="tr-tags">${tramiteTagsHtml(t)}</div>
+        ${t.novedades&&t.novedades.length?`<div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">${t.novedades.slice(-2).map(n=>`<div style="font-size:11px;background:var(--bg3);border-radius:6px;padding:4px 9px;color:var(--text2);line-height:1.4"><span style="color:var(--text3);font-size:10px">${n.autor} · ${new Date(n.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span><br>${n.texto}</div>`).join('')}${t.novedades.length>2?`<div style="font-size:10px;color:var(--text3);padding-left:4px">+${t.novedades.length-2} novedad${t.novedades.length-2!==1?'es':''} anterior${t.novedades.length-2!==1?'es':''} — <span onclick="verNovedades(${c.id},${ti})" style="color:var(--blue-text);cursor:pointer">ver todas</span></div>`:''}</div>`:''}
       </div>
       <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
         ${t.aplica&&t.estado!=='completado'&&canOK?`<button onclick="darOkTramite(${c.id},${ti})" title="Dar OK" style="background:var(--green-dim);border:1px solid var(--green);border-radius:8px;padding:3px 10px;font-size:11px;color:var(--green-text);font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;font-weight:500">✓ OK</button>`:''}
         ${t.aplica&&t.estado==='completado'&&isAdmin?`<button onclick="revertirOkTramite(${c.id},${ti})" title="Revertir OK" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:10px;color:var(--text3);font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap">↩</button>`:''}
+        ${t.aplica?`<button class="tr-edit-btn" onclick="openNovedad(${c.id},${ti})" title="Agregar novedad" style="color:var(--amber-text)"><i class="ti ti-message-plus"></i></button>`:''}
         ${t.aplica&&canEdit?`<button class="tr-edit-btn" onclick="openEditTramite(${c.id},${ti})" title="Editar"><i class="ti ti-pencil"></i></button>`:''}
         ${t.aplica&&canEdit?`<button class="tr-edit-btn" onclick="delTramite(${c.id},${ti})" title="Eliminar" style="color:var(--red-text)"><i class="ti ti-trash"></i></button>`:''}
       </div>
@@ -1210,6 +1240,81 @@ function addCus(cid){
   scheduleSave();renderDetail();
 }
 function backToList(){detailCaseId=null;render();}
+
+// ══════════════════════════════════════════
+// NOVEDADES POR TRÁMITE
+// ══════════════════════════════════════════
+let editingNovedadRef = null; // {caseId, ti}
+
+function openNovedad(cid, ti){
+  const caso = cases.find(x=>x.id===cid); if(!caso) return;
+  const t = caso.tramites[ti];
+  editingNovedadRef = {caseId:cid, ti};
+  document.getElementById('novedad-title').innerHTML = `Novedades — ${t.name} <button class="modal-close" onclick="closeModal('modal-novedad')"><i class="ti ti-x"></i></button>`;
+  document.getElementById('novedad-texto').value = '';
+  renderHistorialNovedades(t.novedades||[]);
+  openModal('modal-novedad');
+}
+
+function renderHistorialNovedades(novedades){
+  const el = document.getElementById('novedades-historial');
+  if(!novedades.length){
+    el.innerHTML = `<div style="font-size:12px;color:var(--text3);text-align:center;padding:10px">Sin novedades todavía</div>`;
+    return;
+  }
+  el.innerHTML = [...novedades].reverse().map(n=>`
+    <div style="background:var(--bg3);border-radius:8px;padding:9px 12px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="font-size:11px;font-weight:500;color:var(--text)">${n.autor}</span>
+        <span style="font-size:10px;color:var(--text3)">${new Date(n.fecha).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.5">${n.texto}</div>
+    </div>`).join('');
+}
+
+function guardarNovedad(){
+  if(!editingNovedadRef) return;
+  const texto = document.getElementById('novedad-texto').value.trim();
+  if(!texto){ document.getElementById('novedad-texto').focus(); return; }
+  const caso = cases.find(x=>x.id===editingNovedadRef.caseId); if(!caso) return;
+  const t = caso.tramites[editingNovedadRef.ti];
+  if(!t.novedades) t.novedades = [];
+  const novedad = {
+    id: Date.now(),
+    autor: currentUser.nombre,
+    autorId: currentUser.id,
+    texto,
+    fecha: new Date().toISOString()
+  };
+  t.novedades.push(novedad);
+  // Notificar al admin si lo agregó un empleado
+  if(currentUser.rol !== 'admin'){
+    const notif = {
+      id: Date.now()+1,
+      tipo: 'novedad_tramite',
+      titulo: `📝 Nueva novedad`,
+      cuerpo: `${currentUser.nombre} agregó: "${texto.substring(0,60)}${texto.length>60?'...':''}" en "${t.name}" — ${caso.cliente}`,
+      caseId: caso.id,
+      tramiteIdx: editingNovedadRef.ti,
+      fecha: new Date().toISOString(),
+      leido: false,
+      paraCaseEmpleado: caso.empleadoId,
+      soloAdmin: true
+    };
+    notificaciones.unshift(notif);
+    if(notificaciones.length>100) notificaciones = notificaciones.slice(0,100);
+    saveNotifsToFirestore();
+    updateNotifBadge();
+  }
+  scheduleSave();
+  document.getElementById('novedad-texto').value = '';
+  renderHistorialNovedades(t.novedades);
+  renderDetail();
+}
+
+function verNovedades(cid, ti){
+  openNovedad(cid, ti);
+}
 
 // ══════════════════════════════════════════════
 // OK TRAMITES + NOTIFICACIONES
