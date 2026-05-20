@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GestorPro">
 <meta name="theme-color" content="#1D9E75">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json"><base href="/Integra/">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1527,7 +1527,7 @@ function closeModal(id){document.getElementById(id).classList.remove('show');}
 // ══════════════════════════════════════════════
 // PWA + SERVICE WORKER
 // ══════════════════════════════════════════════
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('/Integra/sw.js').catch(()=>{});
 
 // ══════════════════════════════════════════════
 // INIT — cargar Firebase y arrancar
