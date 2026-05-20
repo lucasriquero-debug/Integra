@@ -2,7 +2,7 @@
   "name": "GestorPro — Tramitaciones",
   "short_name": "GestorPro",
   "description": "Gestión de trámites profesionales",
-  "start_url": "/",
+  "start_url": "/Integra/",
   "display": "standalone",
   "background_color": "#0D1117",
   "theme_color": "#1D9E75",
