@@ -12,7 +12,7 @@
 <meta name="msapplication-TileColor" content="#1D9E75">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="apple-touch-startup-image" href="icons/icon-512.png">
-<link rel="manifest" href="manifest.json"><base href="/Integra/">
+<link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -325,9 +325,12 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Editar caso <button class="modal-close" onclick="closeModal('modal-edit-caso')"><i class="ti ti-x"></i></button></div>
-    <div class="form-group"><label class="form-label">Nombre del caso</label><input class="form-input" id="ec-nombre" placeholder="Ej: Ochoa, Mensura Rodríguez..."></div>
+    <div class="form-group">
+      <label class="form-label">Nombre del caso <span style="color:var(--text3);font-size:10px">(identificador del expediente)</span></label>
+      <input class="form-input" id="ec-nombre" placeholder="Ej: Ochoa, Mensura Lote 5, Expediente 234...">
+    </div>
     <div class="form-row2">
-      <div class="form-group"><label class="form-label">Cliente</label><input class="form-input" id="ec-cliente" placeholder="Nombre del cliente"></div>
+      <div class="form-group"><label class="form-label">Cliente / Profesional</label><input class="form-input" id="ec-cliente" placeholder="Ej: Eduardo Mora"></div>
       <div class="form-group"><label class="form-label">Tipo profesional</label><select class="form-input" id="ec-prof"></select></div>
     </div>
     <div class="form-row2">
@@ -341,7 +344,7 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
     </div>
     <div class="form-row2">
       <div class="form-group"><label class="form-label">Fecha límite</label><input class="form-input" type="date" id="ec-fecha"></div>
-      <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="ec-notas" placeholder="Observaciones..."></div>
+      <div class="form-group"><label class="form-label">Notas / Observaciones</label><input class="form-input" id="ec-notas" placeholder="Ej: Con publicación de edictos..."></div>
     </div>
     <div class="form-actions">
       <button class="btn-danger" onclick="deleteCaso(editingCasoId)">Eliminar caso</button>
@@ -1407,8 +1410,7 @@ function openEditCaso(cid){
   const c=cases.find(x=>x.id===cid);if(!c)return;
   editingCasoId=cid;
   document.getElementById('ec-nombre').value=c.nombre||c.cliente;
-  document.getElementById('ec-nombre').value=c.nombre||c.cliente;
-  document.getElementById('ec-cliente').value=c.cliente;
+  document.getElementById('ec-cliente').value=c.nombre?c.cliente:'';
   document.getElementById('ec-prof').innerHTML=profesionales.map(p=>`<option value="${p.id}"${c.profId===p.id?' selected':''}>${p.nombre}</option>`).join('');
   document.getElementById('ec-emp').innerHTML=usuarios.map(u=>`<option value="${u.id}"${c.empleadoId===u.id?' selected':''}>${u.nombre}</option>`).join('');
   document.getElementById('ec-estado').value=c.estado;
@@ -1419,8 +1421,10 @@ function openEditCaso(cid){
 function saveEditCaso(){
   const c=cases.find(x=>x.id===editingCasoId);if(!c)return;
   c.nombre=document.getElementById('ec-nombre').value.trim()||c.nombre||c.cliente;
-  c.nombre=document.getElementById('ec-nombre').value.trim()||c.nombre||c.cliente;
-  c.cliente=document.getElementById('ec-cliente').value.trim()||c.cliente;
+  const nuevoNombre=document.getElementById('ec-nombre').value.trim();
+  const nuevoCliente=document.getElementById('ec-cliente').value.trim();
+  c.nombre=nuevoNombre||c.nombre||c.cliente;
+  c.cliente=nuevoCliente||c.cliente;
   c.profId=parseInt(document.getElementById('ec-prof').value);
   c.empleadoId=parseInt(document.getElementById('ec-emp').value);
   c.estado=document.getElementById('ec-estado').value;
