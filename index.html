@@ -290,9 +290,10 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Nuevo caso <button class="modal-close" onclick="closeModal('modal-caso')"><i class="ti ti-x"></i></button></div>
+    <div class="form-group"><label class="form-label">Nombre del caso <span style="color:var(--red-text)">*</span></label><input class="form-input" id="caso-nombre" placeholder="Ej: Ochoa, Mensura Rodríguez, Escritura García..."></div>
     <div class="form-row2">
-      <div class="form-group"><label class="form-label">Cliente guardado</label><select class="form-input" id="caso-cli-sel"></select></div>
-      <div class="form-group"><label class="form-label">O nombre libre</label><input class="form-input" id="caso-cli-libre" placeholder="Nombre..."></div>
+      <div class="form-group"><label class="form-label">Cliente</label><select class="form-input" id="caso-cli-sel"></select></div>
+      <div class="form-group"><label class="form-label">O cliente libre</label><input class="form-input" id="caso-cli-libre" placeholder="Nombre del cliente..."></div>
     </div>
     <div class="form-row2">
       <div class="form-group"><label class="form-label">Tipo profesional</label><select class="form-input" id="caso-prof" onchange="updatePreset()"></select></div>
@@ -324,8 +325,9 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Editar caso <button class="modal-close" onclick="closeModal('modal-edit-caso')"><i class="ti ti-x"></i></button></div>
+    <div class="form-group"><label class="form-label">Nombre del caso</label><input class="form-input" id="ec-nombre" placeholder="Ej: Ochoa, Mensura Rodríguez..."></div>
     <div class="form-row2">
-      <div class="form-group"><label class="form-label">Nombre del caso</label><input class="form-input" id="ec-cliente" placeholder="Nombre del caso / cliente"></div>
+      <div class="form-group"><label class="form-label">Cliente</label><input class="form-input" id="ec-cliente" placeholder="Nombre del cliente"></div>
       <div class="form-group"><label class="form-label">Tipo profesional</label><select class="form-input" id="ec-prof"></select></div>
     </div>
     <div class="form-row2">
@@ -735,11 +737,14 @@ function getProf(id){return profesionales.find(p=>p.id===id)||{nombre:'?',icon:'
 function getUser(id){return usuarios.find(u=>u.id===id)||{nombre:'?',cbg:'#222',ctx:'#888'};}
 function elabel(e){return{nuevo:'Nuevo',proceso:'En proceso',espera:'En espera',listo:'Completado',urgente:'Urgente'}[e]||e;}
 function freqLabel(f){return({1:'Diaria',2:'Cada 2d',3:'Cada 3d',7:'Semanal',14:'Quincenal'}[f]||`Cada ${f}d`);}
-// Título principal del caso: nombre - profesional (notas)
+// Título principal del caso: nombreCaso - cliente — profesional (notas)
 function caseTitulo(cas){
   const pr=getProf(cas.profId);
+  const nombreCaso=cas.nombre||cas.cliente; // fallback para casos viejos
+  const cliente=cas.cliente&&cas.cliente!==nombreCaso?` <span style="font-size:11px;color:var(--text2);font-weight:400">— ${cas.cliente}</span>`:'';
+  const prof=` <span style="font-size:11px;color:var(--text2);font-weight:400">${cas.cliente&&cas.cliente!==nombreCaso?'·':' —'} ${pr.nombre}</span>`;
   const nota=cas.notas?` <span style="font-size:11px;color:var(--text3);font-weight:400">(${cas.notas})</span>`:'';
-  return `${cas.cliente} <span style="font-weight:400;color:var(--text2)">— ${pr.nombre}</span>${nota}`;
+  return `${nombreCaso}${cliente}${prof}${nota}`;
 }
 // Línea secundaria: trámites aplicables
 function caseSubline(cas){
@@ -1163,7 +1168,7 @@ function renderDetail(){
   const canOK=isAdmin||currentUser.perms?.okTramites!==false;
 
   let h=`<div class="detail-header"><button class="detail-back" onclick="backToList()"><i class="ti ti-arrow-left"></i></button><div style="flex:1;min-width:0">
-    <div class="detail-title">${c.cliente} <span style="font-size:13px;font-weight:400;color:var(--text2)">— ${getProf(c.profId).nombre}</span>${c.notas?`<div style="font-size:11px;color:var(--text3);margin-top:2px">(${c.notas})</div>`:''}</div>
+    <div class="detail-title">${c.nombre||c.cliente}</div><div style="font-size:12px;color:var(--text2);margin-top:2px">${c.cliente&&c.cliente!==(c.nombre||c.cliente)?c.cliente+' · ':''} ${getProf(c.profId).nombre}${c.notas?\` · <span style="color:var(--text3)">(${c.notas})</span>`:''}</div>
     <div class="detail-meta">
       <span><div class="emp-av" style="background:${emp.cbg};color:${emp.ctx};width:16px;height:16px;font-size:8px;display:inline-flex;vertical-align:middle;margin-right:3px">${ini(emp.nombre)}</div>${emp.nombre}</span>
       <span><i class="ti ti-calendar" style="font-size:11px"></i> ${c.fecha}</span>
@@ -1293,7 +1298,7 @@ function guardarNovedad(){
       id: Date.now()+1,
       tipo: 'novedad_tramite',
       titulo: `📝 Nueva novedad`,
-      cuerpo: `${currentUser.nombre} agregó: "${texto.substring(0,60)}${texto.length>60?'...':''}" en "${t.name}" — ${caso.cliente}`,
+      cuerpo: `${currentUser.nombre} agregó: "${texto.substring(0,60)}${texto.length>60?'...':''}" en "${t.name}" — ${caso.nombre||caso.cliente}`,
       caseId: caso.id,
       tramiteIdx: editingNovedadRef.ti,
       fecha: new Date().toISOString(),
@@ -1330,7 +1335,7 @@ function darOkTramite(cid,ti){
     id:Date.now(),
     tipo:'ok_tramite',
     titulo:`✓ Trámite completado`,
-    cuerpo:`${currentUser.nombre} marcó "${t.name}" como OK en el caso "${caso.cliente}"`,
+    cuerpo:`${currentUser.nombre} marcó "${t.name}" como OK en el caso "${caso.nombre||caso.cliente}"`,
     caseId:cid,
     tramiteIdx:ti,
     fecha:new Date().toISOString(),
@@ -1401,6 +1406,8 @@ let editingCasoId=null;
 function openEditCaso(cid){
   const c=cases.find(x=>x.id===cid);if(!c)return;
   editingCasoId=cid;
+  document.getElementById('ec-nombre').value=c.nombre||c.cliente;
+  document.getElementById('ec-nombre').value=c.nombre||c.cliente;
   document.getElementById('ec-cliente').value=c.cliente;
   document.getElementById('ec-prof').innerHTML=profesionales.map(p=>`<option value="${p.id}"${c.profId===p.id?' selected':''}>${p.nombre}</option>`).join('');
   document.getElementById('ec-emp').innerHTML=usuarios.map(u=>`<option value="${u.id}"${c.empleadoId===u.id?' selected':''}>${u.nombre}</option>`).join('');
@@ -1411,6 +1418,8 @@ function openEditCaso(cid){
 }
 function saveEditCaso(){
   const c=cases.find(x=>x.id===editingCasoId);if(!c)return;
+  c.nombre=document.getElementById('ec-nombre').value.trim()||c.nombre||c.cliente;
+  c.nombre=document.getElementById('ec-nombre').value.trim()||c.nombre||c.cliente;
   c.cliente=document.getElementById('ec-cliente').value.trim()||c.cliente;
   c.profId=parseInt(document.getElementById('ec-prof').value);
   c.empleadoId=parseInt(document.getElementById('ec-emp').value);
@@ -1480,7 +1489,8 @@ function openModalCaso(prefill){
   // Pre-seleccionar empleado actual si no es admin
   if(currentUser.rol!=='admin')document.getElementById('caso-emp').value=currentUser.id;
   const d=new Date();d.setDate(d.getDate()+14);document.getElementById('caso-fecha').value=d.toISOString().split('T')[0];
-  document.getElementById('caso-cli-libre').value='';document.getElementById('caso-notas').value='';
+  document.getElementById('caso-nombre').value='';document.getElementById('caso-cli-libre').value='';document.getElementById('caso-notas').value='';
+  document.getElementById('caso-nombre').value='';
   customPresets=[];updatePreset();openModal('modal-caso');
 }
 function openModalCasoFor(nombre){openModalCaso(nombre);}
@@ -1497,14 +1507,16 @@ function addPresetCustom(){
   customPresets.push({name,defaultRevision:1});if(inp)inp.value='';updatePreset();
 }
 function createCaso(){
-  const cs=document.getElementById('caso-cli-sel').value,cl=document.getElementById('caso-cli-libre').value.trim(),cliente=cs||cl;
-  if(!cliente){alert('Ingresá el nombre del cliente');return;}
+  const nombreCaso=document.getElementById('caso-nombre').value.trim();
+  if(!nombreCaso){alert('Ingresá el nombre del caso');document.getElementById('caso-nombre').focus();return;}
+  const cs=document.getElementById('caso-cli-sel').value,cl=document.getElementById('caso-cli-libre').value.trim(),cliente=cs||cl||nombreCaso;
   const profId=parseInt(document.getElementById('caso-prof').value);
   const all=[...(presetsTramites[profId]||[]),...customPresets];
   const t0=hoy();
   const tramites=all.map((t,i)=>{const chk=document.getElementById('pc'+i);return{name:t.name,aplica:chk?chk.checked:false,estado:'pendiente',deadline:t.defaultDeadlineDays?masD(t0,t.defaultDeadlineDays):null,revision:t.defaultRevision||null,lastRevision:null,nota:t.nota||''};});
-  const nc={id:Date.now(),cliente,profId,empleadoId:parseInt(document.getElementById('caso-emp').value),estado:document.getElementById('caso-estado').value,fecha:document.getElementById('caso-fecha').value,notas:document.getElementById('caso-notas').value,tramites};
+  const nc={id:Date.now(),nombre:nombreCaso,cliente,profId,empleadoId:parseInt(document.getElementById('caso-emp').value),estado:document.getElementById('caso-estado').value,fecha:document.getElementById('caso-fecha').value,notas:document.getElementById('caso-notas').value,tramites};
   cases.unshift(nc);scheduleSave();closeModal('modal-caso');
+  document.getElementById('caso-nombre').value='';
   customPresets=[];detailCaseId=nc.id;activeTab='casos';
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-casos').classList.add('active');
