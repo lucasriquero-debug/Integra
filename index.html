@@ -290,20 +290,53 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title">Nuevo caso <button class="modal-close" onclick="closeModal('modal-caso')"><i class="ti ti-x"></i></button></div>
-    <div class="form-group"><label class="form-label">Nombre del caso <span style="color:var(--red-text)">*</span></label><input class="form-input" id="caso-nombre" placeholder="Ej: Ochoa, Mensura Rodríguez, Escritura García..."></div>
-    <div class="form-row2">
-      <div class="form-group"><label class="form-label">Cliente</label><select class="form-input" id="caso-cli-sel"></select></div>
-      <div class="form-group"><label class="form-label">O cliente libre</label><input class="form-input" id="caso-cli-libre" placeholder="Nombre del cliente..."></div>
+
+    <!-- PASO 1: Tipo de profesional -->
+    <div class="form-group">
+      <label class="form-label">1. Tipo de profesional</label>
+      <select class="form-input" id="caso-tipo-prof" onchange="filtrarProfsPorTipo()">
+        <option value="">— Seleccioná el tipo —</option>
+      </select>
     </div>
+
+    <!-- PASO 2: Profesional (filtrado por tipo) -->
+    <div class="form-group">
+      <label class="form-label">2. Profesional</label>
+      <div style="position:relative">
+        <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none"></i>
+        <input class="form-input" id="caso-prof-search" placeholder="Buscar profesional..." oninput="filtrarProfsPorBusqueda()" style="padding-left:34px" autocomplete="off">
+      </div>
+      <div id="caso-prof-lista" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;max-height:150px;overflow-y:auto;margin-top:6px;display:none"></div>
+      <input type="hidden" id="caso-prof-id">
+      <div id="caso-prof-seleccionado" style="display:none;background:var(--green-dim);border:1px solid var(--green);border-radius:8px;padding:7px 12px;margin-top:6px;font-size:13px;color:var(--green-text);display:none;align-items:center;justify-content:space-between">
+        <span id="caso-prof-sel-nombre"></span>
+        <button onclick="limpiarProfSeleccionado()" style="background:none;border:none;color:var(--green-text);cursor:pointer;font-size:14px"><i class="ti ti-x"></i></button>
+      </div>
+    </div>
+
+    <!-- PASO 3: Nombre del caso -->
+    <div class="form-group">
+      <label class="form-label">3. Nombre del caso <span style="color:var(--text3);font-size:10px">(apellido del titular, referencia)</span></label>
+      <input class="form-input" id="caso-nombre" placeholder="Ej: García, Lote 5 Luján, Expediente 234...">
+    </div>
+
+    <!-- PASO 4: Naturaleza del trabajo -->
+    <div class="form-group">
+      <label class="form-label">4. Naturaleza del trabajo <span style="color:var(--text3);font-size:10px">(tipo de caso)</span></label>
+      <input class="form-input" id="caso-notas" placeholder="Ej: Fraccionamiento, Mensura con publicación, Escritura...">
+    </div>
+
     <div class="form-row2">
-      <div class="form-group"><label class="form-label">Tipo profesional</label><select class="form-input" id="caso-prof" onchange="updatePreset()"></select></div>
       <div class="form-group"><label class="form-label">Empleado</label><select class="form-input" id="caso-emp"></select></div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-input" id="caso-estado">
+          <option value="nuevo">Nuevo</option><option value="proceso">En proceso</option>
+          <option value="urgente">Urgente</option><option value="espera">En espera</option>
+        </select>
+      </div>
     </div>
-    <div class="form-row2">
-      <div class="form-group"><label class="form-label">Estado</label><select class="form-input" id="caso-estado"><option value="nuevo">Nuevo</option><option value="proceso">En proceso</option><option value="urgente">Urgente</option><option value="espera">En espera</option></select></div>
-      <div class="form-group"><label class="form-label">Fecha límite</label><input class="form-input" type="date" id="caso-fecha"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="caso-notas" placeholder="Ej: Con publicación edictos, Urgente, Con deuda..."></div>
+    <div class="form-group"><label class="form-label">Fecha límite</label><input class="form-input" type="date" id="caso-fecha"></div>
+
     <div class="form-group">
       <label class="form-label">Trámites — marcá los que aplican</label>
       <div class="preset-list" id="preset-checks"></div>
@@ -318,7 +351,6 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
     </div>
   </div>
 </div>
-
 
 <!-- MODAL EDITAR CASO -->
 <div class="modal-overlay" id="modal-edit-caso" onclick="if(event.target===this)closeModal('modal-edit-caso')">
@@ -383,6 +415,41 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
     <div class="form-actions">
       <button class="btn-sec" onclick="closeModal('modal-tramite')">Cancelar</button>
       <button class="btn-full" onclick="saveTramite()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FICHA PROFESIONAL -->
+<div class="modal-overlay" id="modal-prof-persona" onclick="if(event.target===this)closeModal('modal-prof-persona')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="prof-modal-title">Nuevo profesional <button class="modal-close" onclick="closeModal('modal-prof-persona')"><i class="ti ti-x"></i></button></div>
+    <div class="form-row2">
+      <div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" id="pp-nombre" placeholder="Ej: Eduardo Mora"></div>
+      <div class="form-group"><label class="form-label">Tipo</label><select class="form-input" id="pp-tipo"></select></div>
+    </div>
+    <div class="form-row2">
+      <div class="form-group"><label class="form-label">CUIL</label><input class="form-input" id="pp-cuil" placeholder="20-12345678-9"></div>
+      <div class="form-group"><label class="form-label">Matrícula</label><input class="form-input" id="pp-matricula" placeholder="Nº de matrícula"></div>
+    </div>
+    <div class="form-row2">
+      <div class="form-group"><label class="form-label">Registro <span style="color:var(--text3);font-size:10px">(escribanos)</span></label><input class="form-input" id="pp-registro" placeholder="Nº de registro"></div>
+      <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="pp-tel" placeholder="+54 9 261..."></div>
+    </div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="pp-email" type="email" placeholder="correo@..."></div>
+    <div class="form-group">
+      <label class="form-label">Cuentas y datos extra <span style="color:var(--text3);font-size:10px">(ATM, AYSAM, Irrigación, etc.)</span></label>
+      <div id="pp-cuentas-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:6px">
+        <input class="form-input" id="pp-cuenta-key" placeholder="Nombre (ej: ATM Bancor)" style="flex:1">
+        <input class="form-input" id="pp-cuenta-val" placeholder="Valor (ej: 1234-5)" style="flex:1">
+        <button onclick="addCuentaPP()" style="background:var(--green);border:none;border-radius:10px;padding:0 14px;color:#fff;font-family:'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;font-size:13px">+</button>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notas</label><input class="form-input" id="pp-notas" placeholder="Observaciones..."></div>
+    <div class="form-actions">
+      <button class="btn-sec" onclick="closeModal('modal-prof-persona')">Cancelar</button>
+      <button class="btn-full" id="pp-save-btn" onclick="saveProfPersona()">Guardar profesional</button>
     </div>
   </div>
 </div>
@@ -540,13 +607,13 @@ function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 let saveTimer=null;
 async function scheduleSave(){
   // Guardar en localStorage inmediatamente (para offline)
-  sv('gp_data',{cases,clientes,usuarios,profesionales,presetsTramites,notificaciones});
+  sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
   // Guardar en Firestore con debounce 800ms
   if(saveTimer)clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>saveToFirestore(),800);
 }
 async function saveNotifs(){
-  sv('gp_data',{cases,clientes,usuarios,profesionales,presetsTramites,notificaciones});
+  sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
   await saveToFirestore();
 }
 
@@ -554,7 +621,7 @@ async function saveToFirestore(){
   try{
     setSyncStatus('syncing');
     await db.collection('gestorpro').doc('data').set({
-      cases,clientes,usuarios,profesionales,presetsTramites,
+      cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,
       updatedAt:new Date().toISOString()
     });
     lastSavedAt=new Date().toISOString();
@@ -571,11 +638,13 @@ async function loadFromFirestore(){
     if(snap.exists){
       const d=snap.data();
       if(d.usuarios)usuarios=d.usuarios;
+      if(d.tiposProfesional)tiposProfesional=d.tiposProfesional;
       if(d.profesionales)profesionales=d.profesionales;
+      else if(d.profesionalesPersonas)profesionales=d.profesionalesPersonas;
       if(d.presetsTramites)presetsTramites=d.presetsTramites;
       if(d.cases){cases=d.cases;migrarCasos();}
       if(d.clientes)clientes=d.clientes;
-      sv('gp_data',{cases,clientes,usuarios,profesionales,presetsTramites,notificaciones});
+      sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
     }
   }catch(e){
     console.warn('Sin conexión, usando datos locales:',e);
@@ -600,11 +669,13 @@ function startRealtimeSync(){
     if(remoteTime===lastSavedAt)return;
     lastSavedAt=remoteTime;
     if(d.usuarios)usuarios=d.usuarios;
+    if(d.tiposProfesional)tiposProfesional=d.tiposProfesional;
     if(d.profesionales)profesionales=d.profesionales;
+    else if(d.profesionalesPersonas)profesionales=d.profesionalesPersonas;
     if(d.presetsTramites)presetsTramites=d.presetsTramites;
     if(d.cases)cases=d.cases;
     if(d.clientes)clientes=d.clientes;
-    sv('gp_data',{cases,clientes,usuarios,profesionales,presetsTramites,notificaciones});
+    sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
     // Actualizar UI si está logueado
     if(currentUser){
       // Actualizar currentUser con datos frescos
@@ -662,10 +733,17 @@ let usuarios = data?.usuarios || [
   {id:4,nombre:"Sofía R.",rol:"empleado",pin:"0000",cbg:"#1A2E0A",ctx:"#7EE787",perms:{soloCasos:true,crearCasos:true,verClientes:true,editarTramites:true,okTramites:true}},
 ];
 
-let profesionales = data?.profesionales || [
+// tiposProfesional = categorías (agrimensor, abogado, escribano)
+let tiposProfesional = data?.tiposProfesional || data?.profesionales || [
   {id:1,nombre:"Agrimensor",icon:"ti-map",colorClass:"agrim"},
   {id:2,nombre:"Abogado",icon:"ti-scale",colorClass:"abog"},
   {id:3,nombre:"Escribano",icon:"ti-license",colorClass:"escrib"},
+];
+// profesionales = personas reales con sus datos
+let profesionales = data?.profesionalesPersonas || [
+  {id:101,nombre:"Eduardo Mora",tipoId:1,cuil:"",matricula:"",registro:"",cuentas:[]},
+  {id:102,nombre:"Fernanda Gomez de Yapur",tipoId:3,cuil:"",matricula:"",registro:"",cuentas:[]},
+  {id:103,nombre:"Juanfra Mora",tipoId:1,cuil:"",matricula:"",registro:"",cuentas:[]},
 ];
 
 let presetsTramites = data?.presetsTramites || {
@@ -745,24 +823,27 @@ function hoy(){return new Date().toISOString().split('T')[0];}
 function masD(d,n){const dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().split('T')[0];}
 function dleft(d){return d?Math.ceil((new Date(d)-new Date())/86400000):null;}
 function ini(n){return n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
-function getProf(id){return profesionales.find(p=>p.id===id)||{nombre:'?',icon:'ti-file',colorClass:'otro'};}
+function getTipo(id){return tiposProfesional.find(t=>t.id===id)||{nombre:'?',icon:'ti-file',colorClass:'otro'};}
+function getProf(id){return tiposProfesional.find(p=>p.id===id)||{nombre:'?',icon:'ti-file',colorClass:'otro'};}
+function getProfPersona(id){return profesionales.find(p=>p.id===id)||null;}
+function getProfPersonasByTipo(tipoId){return profesionales.filter(p=>p.tipoId===tipoId);}
 function getUser(id){return usuarios.find(u=>u.id===id)||{nombre:'?',cbg:'#222',ctx:'#888'};}
 function elabel(e){return{nuevo:'Nuevo',proceso:'En proceso',espera:'En espera',listo:'Completado',urgente:'Urgente'}[e]||e;}
 function freqLabel(f){return({1:'Diaria',2:'Cada 2d',3:'Cada 3d',7:'Semanal',14:'Quincenal'}[f]||`Cada ${f}d`);}
 // Título principal del caso: nombreCaso - cliente — profesional (notas)
 function caseTitulo(cas){
-  const pr=getProf(cas.profId);
-  const nombreCaso=cas.nombre||cas.cliente; // fallback para casos viejos
-  const cliente=cas.cliente&&cas.cliente!==nombreCaso?` <span style="font-size:11px;color:var(--text2);font-weight:400">— ${cas.cliente}</span>`:'';
-  const prof=` <span style="font-size:11px;color:var(--text2);font-weight:400">${cas.cliente&&cas.cliente!==nombreCaso?'·':' —'} ${pr.nombre}</span>`;
-  const nota=cas.notas?` <span style="font-size:11px;color:var(--text3);font-weight:400">(${cas.notas})</span>`:'';
-  return `${nombreCaso}${cliente}${prof}${nota}`;
+  const tipo=getProf(cas.tipoId||cas.profId);
+  const profPersona=getProfPersona(cas.profId);
+  const nombreCaso=cas.nombre||cas.cliente||'Sin nombre';
+  const profNombre=profPersona?profPersona.nombre:(cas.cliente||'');
+  const naturaleza=cas.notas?` <span style="font-size:11px;color:var(--text3);font-weight:400">(${cas.notas})</span>`:'';
+  return `${nombreCaso} <span style="font-weight:400;color:var(--text2)">— ${profNombre}</span>${naturaleza}`;
 }
-// Línea secundaria: trámites aplicables
+// Línea secundaria: tipo profesional · trámites aplicables
 function caseSubline(cas){
+  const tipo=getProf(cas.tipoId||cas.profId);
   const tramites=cas.tramites.filter(t=>t.aplica).map(t=>t.name).join(' · ')||'Sin trámites';
-  const emp=getUser(cas.empleadoId);
-  return `${tramites}`;
+  return `${tipo.nombre} · ${tramites}`;
 }
 
 function prog(c){
@@ -1160,9 +1241,32 @@ function renderAdmin(){
   });
   h+=`</div>`;
 
+  // — PROFESIONALES PERSONAS —
+  h+=`<div class="section-label">Profesionales</div><div class="card"><div class="card-header"><span class="card-title">Profesionales cargados (${profesionales.length})</span><button onclick="openModalProfPersona()" style="background:var(--green);border:none;border-radius:8px;padding:4px 12px;font-size:12px;color:#fff;font-family:'DM Sans',sans-serif;cursor:pointer">+ Agregar</button></div>`;
+  // Agrupar por tipo
+  tiposProfesional.forEach(tipo=>{
+    const lista=profesionales.filter(p=>p.tipoId===tipo.id);
+    if(!lista.length)return;
+    h+=`<div style="padding:6px 14px 2px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border2)">${tipo.nombre}s (${lista.length})</div>`;
+    lista.forEach(p=>{
+      h+=`<div class="admin-item">
+        <div class="ci ci-${tipo.colorClass}" style="width:28px;height:28px;border-radius:7px;font-size:14px"><i class="ti ${tipo.icon}"></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="admin-item-label">${p.nombre}</div>
+          <div class="admin-item-sub">${p.matricula?'Mat: '+p.matricula+' · ':''}${p.cuil?'CUIL: '+p.cuil+' · ':''}${(p.cuentas||[]).length} cuenta${(p.cuentas||[]).length!==1?'s':''}</div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn-icon" onclick="openModalProfPersona(${p.id})" title="Editar"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon del" onclick="delProfPersona(${p.id})" title="Eliminar"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;
+    });
+  });
+  h+=`</div>`;
+
   // — TIPOS DE PROFESIONALES —
   h+=`<div class="section-label">Tipos de profesionales</div><div class="card">`;
-  profesionales.forEach(p=>{
+  tiposProfesional.forEach(p=>{
     const tramCount=(presetsTramites[p.id]||[]).length;
     h+=`<div class="admin-item"><div class="ci ci-${p.colorClass}" style="width:30px;height:30px;font-size:15px"><i class="ti ${p.icon}"></i></div><div style="flex:1;min-width:0"><div class="admin-item-label">${p.nombre}</div><div class="admin-item-sub">${tramCount} trámite${tramCount!==1?'s':''} predefinido${tramCount!==1?'s':''}</div></div><div class="admin-actions"><button class="btn-icon" onclick="editProfNombre(${p.id})" title="Editar nombre"><i class="ti ti-pencil"></i></button><button class="btn-icon del" onclick="delProfesional(${p.id})" title="Eliminar"><i class="ti ti-trash"></i></button></div></div>`;
   });
@@ -1208,11 +1312,79 @@ function addProfesional(){
   scheduleSave();renderAdmin();
 }
 function delProfesional(id){
-  const enUso=cases.some(c=>c.profId===id)||clientes.some(c=>c.profId===id);
-  if(enUso){alert('No se puede eliminar: hay casos o clientes usando este tipo de profesional.');return;}
+  const enUso=cases.some(c=>c.tipoId===id);
+  if(enUso){alert('No se puede eliminar: hay casos usando este tipo de profesional.');return;}
   if(!confirm('¿Eliminar este tipo de profesional?'))return;
-  profesionales=profesionales.filter(p=>p.id!==id);
+  tiposProfesional=tiposProfesional.filter(p=>p.id!==id);
   delete presetsTramites[id];
+  scheduleSave();renderAdmin();
+}
+
+// ── Ficha profesional persona ──────────────────────
+let editingProfPersonaId=null;
+let ppCuentasTemp=[];
+
+function openModalProfPersona(id){
+  editingProfPersonaId=id||null;
+  const pp=id?profesionales.find(x=>x.id===id):null;
+  document.getElementById('prof-modal-title').innerHTML=(pp?'Editar':'Nuevo')+' profesional <button class="modal-close" onclick="closeModal('modal-prof-persona')"><i class="ti ti-x"></i></button>';
+  document.getElementById('pp-save-btn').textContent=pp?'Guardar cambios':'Agregar profesional';
+  document.getElementById('pp-tipo').innerHTML=tiposProfesional.map(t=>`<option value="${t.id}"${pp&&pp.tipoId===t.id?' selected':''}>${t.nombre}</option>`).join('');
+  document.getElementById('pp-nombre').value=pp?.nombre||'';
+  document.getElementById('pp-cuil').value=pp?.cuil||'';
+  document.getElementById('pp-matricula').value=pp?.matricula||'';
+  document.getElementById('pp-registro').value=pp?.registro||'';
+  document.getElementById('pp-tel').value=pp?.tel||'';
+  document.getElementById('pp-email').value=pp?.email||'';
+  document.getElementById('pp-notas').value=pp?.notas||'';
+  ppCuentasTemp=[...(pp?.cuentas||[])];
+  renderCuentasPP();
+  openModal('modal-prof-persona');
+}
+
+function renderCuentasPP(){
+  document.getElementById('pp-cuentas-lista').innerHTML=ppCuentasTemp.map((cu,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;background:var(--bg3);border-radius:8px;padding:6px 10px">
+      <span style="font-size:12px;color:var(--text2);flex:1"><strong>${cu.key}:</strong> ${cu.val}</span>
+      <button onclick="ppCuentasTemp.splice(${i},1);renderCuentasPP()" style="background:none;border:none;color:var(--red-text);cursor:pointer;font-size:14px"><i class="ti ti-x"></i></button>
+    </div>`).join('');
+}
+
+function addCuentaPP(){
+  const k=document.getElementById('pp-cuenta-key').value.trim();
+  const v=document.getElementById('pp-cuenta-val').value.trim();
+  if(!k||!v){alert('Completá nombre y valor');return;}
+  ppCuentasTemp.push({key:k,val:v});
+  document.getElementById('pp-cuenta-key').value='';
+  document.getElementById('pp-cuenta-val').value='';
+  renderCuentasPP();
+}
+
+function saveProfPersona(){
+  const nombre=document.getElementById('pp-nombre').value.trim();
+  if(!nombre){alert('Ingresá el nombre');return;}
+  const tipoId=parseInt(document.getElementById('pp-tipo').value);
+  const data={nombre,tipoId,cuil:document.getElementById('pp-cuil').value,
+    matricula:document.getElementById('pp-matricula').value,
+    registro:document.getElementById('pp-registro').value,
+    tel:document.getElementById('pp-tel').value,
+    email:document.getElementById('pp-email').value,
+    notas:document.getElementById('pp-notas').value,
+    cuentas:[...ppCuentasTemp]};
+  if(editingProfPersonaId){
+    const idx=profesionales.findIndex(x=>x.id===editingProfPersonaId);
+    if(idx>=0)profesionales[idx]={...profesionales[idx],...data};
+  } else {
+    profesionales.push({id:Date.now(),...data});
+  }
+  scheduleSave();closeModal('modal-prof-persona');renderAdmin();
+}
+
+function delProfPersona(id){
+  const enUso=cases.some(c=>c.profId===id);
+  if(enUso){alert('No se puede eliminar: hay casos asociados a este profesional.');return;}
+  if(!confirm('¿Eliminar este profesional?'))return;
+  profesionales=profesionales.filter(p=>p.id!==id);
   scheduleSave();renderAdmin();
 }
 function editProfNombre(id){
@@ -1574,42 +1746,154 @@ function saveTramite(){
 // ══════════════════════════════════════════════
 // MODAL NUEVO CASO
 // ══════════════════════════════════════════════
-function openModalCaso(prefill){
-  document.getElementById('caso-cli-sel').innerHTML='<option value="">— Seleccionar —</option>'+clientes.map(c=>`<option value="${c.nombre}"${prefill===c.nombre?' selected':''}>${c.nombre}</option>`).join('');
-  document.getElementById('caso-prof').innerHTML=profesionales.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-  document.getElementById('caso-emp').innerHTML=usuarios.map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('');
-  // Pre-seleccionar empleado actual si no es admin
-  if(currentUser.rol!=='admin')document.getElementById('caso-emp').value=currentUser.id;
-  const d=new Date();d.setDate(d.getDate()+14);document.getElementById('caso-fecha').value=d.toISOString().split('T')[0];
-  document.getElementById('caso-nombre').value='';document.getElementById('caso-cli-libre').value='';document.getElementById('caso-notas').value='';
-  document.getElementById('caso-nombre').value='';
-  customPresets=[];updatePreset();openModal('modal-caso');
+function openModalCaso(prefillProf){
+  // Poblar tipos de profesional
+  const tipSel = document.getElementById('caso-tipo-prof');
+  tipSel.innerHTML = '<option value="">— Seleccioná el tipo —</option>' +
+    tiposProfesional.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('');
+
+  // Poblar empleados
+  document.getElementById('caso-emp').innerHTML = usuarios.map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('');
+  if(currentUser.rol!=='admin') document.getElementById('caso-emp').value = currentUser.id;
+
+  // Fecha default
+  const d=new Date(); d.setDate(d.getDate()+14);
+  document.getElementById('caso-fecha').value = d.toISOString().split('T')[0];
+
+  // Limpiar campos
+  document.getElementById('caso-nombre').value = '';
+  document.getElementById('caso-notas').value = '';
+  document.getElementById('caso-estado').value = 'nuevo';
+  document.getElementById('caso-prof-search').value = '';
+  document.getElementById('caso-prof-id').value = '';
+  document.getElementById('caso-prof-seleccionado').style.display = 'none';
+  document.getElementById('caso-prof-lista').style.display = 'none';
+
+  // Si viene con profesional pre-seleccionado
+  if(prefillProf){
+    const tp = tiposProfesional.find(t=>t.id===prefillProf.tipoId);
+    if(tp) tipSel.value = tp.id;
+    filtrarProfsPorTipo();
+    seleccionarProf(prefillProf);
+  } else {
+    filtrarProfsPorTipo();
+  }
+
+  customPresets=[];
+  updatePreset();
+  openModal('modal-caso');
 }
+
+function filtrarProfsPorTipo(){
+  const tipoId = parseInt(document.getElementById('caso-tipo-prof').value);
+  document.getElementById('caso-prof-search').value='';
+  document.getElementById('caso-prof-id').value='';
+  document.getElementById('caso-prof-seleccionado').style.display='none';
+  document.getElementById('caso-prof-lista').style.display='none';
+  // Actualizar presets de trámites
+  updatePreset();
+}
+
+function filtrarProfsPorBusqueda(){
+  const tipoId = parseInt(document.getElementById('caso-tipo-prof').value);
+  const q = document.getElementById('caso-prof-search').value.toLowerCase().trim();
+  const lista = document.getElementById('caso-prof-lista');
+
+  let profs = profesionales;
+  if(tipoId) profs = profs.filter(p=>p.tipoId===tipoId);
+  if(q) profs = profs.filter(p=>p.nombre.toLowerCase().includes(q));
+
+  if(!profs.length){
+    lista.innerHTML='<div style="padding:10px 14px;font-size:13px;color:var(--text3)">Sin resultados</div>';
+    lista.style.display='block';
+    return;
+  }
+  lista.innerHTML = profs.map(p=>{
+    const tipo = tiposProfesional.find(t=>t.id===p.tipoId);
+    return `<div onclick="seleccionarProf(${JSON.stringify({id:p.id,nombre:p.nombre,tipoId:p.tipoId}).replace(/"/g,'&quot;')})"
+      style="padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:13px;color:var(--text)"
+      onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <div style="font-weight:500">${p.nombre}</div>
+      <div style="font-size:11px;color:var(--text2)">${tipo?tipo.nombre:''}</div>
+    </div>`;
+  }).join('');
+  lista.style.display='block';
+}
+
+function seleccionarProf(prof){
+  if(typeof prof === 'string') prof = JSON.parse(prof);
+  document.getElementById('caso-prof-id').value = prof.id;
+  document.getElementById('caso-prof-sel-nombre').textContent = prof.nombre;
+  document.getElementById('caso-prof-seleccionado').style.display = 'flex';
+  document.getElementById('caso-prof-search').value = '';
+  document.getElementById('caso-prof-lista').style.display = 'none';
+  // Actualizar tipo si no estaba seleccionado
+  if(prof.tipoId) document.getElementById('caso-tipo-prof').value = prof.tipoId;
+  updatePreset();
+}
+
+function limpiarProfSeleccionado(){
+  document.getElementById('caso-prof-id').value='';
+  document.getElementById('caso-prof-seleccionado').style.display='none';
+  document.getElementById('caso-prof-search').value='';
+  updatePreset();
+}
+
+
 function openModalCasoFor(nombre){openModalCaso(nombre);}
 function updatePreset(){
-  const profId=parseInt(document.getElementById('caso-prof').value);
-  const list=[...(presetsTramites[profId]||[]),...customPresets];
+  const tipoId = parseInt(document.getElementById('caso-tipo-prof')?.value||
+    document.getElementById('caso-prof-id')?.value&&
+    (profesionales.find(p=>p.id===parseInt(document.getElementById('caso-prof-id').value))?.tipoId)||0);
+  const list=[...(presetsTramites[tipoId]||[]),...customPresets];
   document.getElementById('preset-checks').innerHTML=list.map((t,i)=>`
     <div class="preset-item"><input type="checkbox" id="pc${i}" ${i<2?'checked':''}><label for="pc${i}">${t.name}${t.nota?` <span style="font-size:10px;color:var(--amber-text);background:var(--amber-dim);padding:1px 6px;border-radius:20px;margin-left:4px">${t.nota}</span>`:''}
     <span style="font-size:10px;color:var(--text3);margin-left:4px">${t.defaultDeadlineDays?`⏰${t.defaultDeadlineDays}d`:''}${t.defaultRevision?` 🔄${freqLabel(t.defaultRevision)}`:''}
     </span></label></div>`).join('');
 }
+
 function addPresetCustom(){
   const inp=document.getElementById('custom-preset-inp');const name=inp?inp.value.trim():'';if(!name)return;
   customPresets.push({name,defaultRevision:1});if(inp)inp.value='';updatePreset();
 }
 function createCaso(){
-  const nombreCaso=document.getElementById('caso-nombre').value.trim();
-  if(!nombreCaso){alert('Ingresá el nombre del caso');document.getElementById('caso-nombre').focus();return;}
-  const cs=document.getElementById('caso-cli-sel').value,cl=document.getElementById('caso-cli-libre').value.trim(),cliente=cs||cl||nombreCaso;
-  const profId=parseInt(document.getElementById('caso-prof').value);
-  const all=[...(presetsTramites[profId]||[]),...customPresets];
+  const profId = parseInt(document.getElementById('caso-prof-id').value);
+  if(!profId){alert('Seleccioná un profesional');return;}
+  const prof = profesionales.find(p=>p.id===profId);
+  if(!prof){alert('Profesional no encontrado');return;}
+
+  const nombre = document.getElementById('caso-nombre').value.trim();
+  if(!nombre){alert('Ingresá el nombre del caso');document.getElementById('caso-nombre').focus();return;}
+
+  const tipoId = prof.tipoId;
+  const all=[...(presetsTramites[tipoId]||[]),...customPresets];
   const t0=hoy();
-  const tramites=all.map((t,i)=>{const chk=document.getElementById('pc'+i);return{name:t.name,aplica:chk?chk.checked:false,estado:'pendiente',deadline:t.defaultDeadlineDays?masD(t0,t.defaultDeadlineDays):null,revision:t.defaultRevision||null,lastRevision:null,nota:t.nota||''};});
-  const nc={id:Date.now(),nombre:nombreCaso,cliente,profId,empleadoId:parseInt(document.getElementById('caso-emp').value),estado:document.getElementById('caso-estado').value,fecha:document.getElementById('caso-fecha').value,notas:document.getElementById('caso-notas').value,tramites};
-  cases.unshift(nc);scheduleSave();closeModal('modal-caso');
-  document.getElementById('caso-nombre').value='';
-  customPresets=[];detailCaseId=nc.id;activeTab='casos';
+  const tramites=all.map((t,i)=>{
+    const chk=document.getElementById('pc'+i);
+    return{name:t.name,aplica:chk?chk.checked:false,estado:'pendiente',
+      deadline:t.defaultDeadlineDays?masD(t0,t.defaultDeadlineDays):null,
+      revision:t.defaultRevision||null,lastRevision:null,nota:t.nota||''};
+  });
+
+  const nc={
+    id:Date.now(),
+    nombre,                          // nombre del caso (ej: García)
+    profId,                          // ID del profesional persona
+    tipoId,                          // ID del tipo (agrimensor etc)
+    cliente:prof.nombre,             // nombre del profesional
+    empleadoId:parseInt(document.getElementById('caso-emp').value),
+    estado:document.getElementById('caso-estado').value,
+    fecha:document.getElementById('caso-fecha').value,
+    notas:document.getElementById('caso-notas').value,  // naturaleza del trabajo
+    tramites
+  };
+
+  cases.unshift(nc);
+  scheduleSave();
+  closeModal('modal-caso');
+  customPresets=[];
+  detailCaseId=nc.id;
+  activeTab='casos';
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-casos').classList.add('active');
   document.getElementById('new-label').textContent='Nuevo caso';
@@ -1617,165 +1901,4 @@ function createCaso(){
   render();
 }
 
-// ══════════════════════════════════════════════
-// MODAL CLIENTE
-// ══════════════════════════════════════════════
-function openModalCliente(id){
-  id=id||null;
-  editingClienteId=id;
-  const c=id?clientes.find(x=>x.id===id):null;
-  document.getElementById('cli-modal-title').innerHTML=(c?'Editar':'Nuevo')+' cliente <button class="modal-close" onclick="closeModal(\'modal-cliente\')"><i class="ti ti-x"></i></button>';
-  document.getElementById('cli-save-btn').textContent=c?'Guardar cambios':'Guardar cliente';
-  document.getElementById('cli-tipo').innerHTML=profesionales.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
-  if(c){
-    document.getElementById('cli-nombre').value=c.nombre;
-    document.getElementById('cli-tipo').value=c.profId;
-    document.getElementById('cli-tel').value=c.tel||'';
-    document.getElementById('cli-email').value=c.email||'';
-    document.getElementById('cli-dir').value=c.dir||'';
-    document.getElementById('cli-cuit').value=c.cuit||'';
-    document.getElementById('cli-notas').value=c.notas||'';
-  } else {
-    ['cli-nombre','cli-tel','cli-email','cli-dir','cli-cuit','cli-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  }
-  openModal('modal-cliente');
-}
-function saveCliente(){
-  const nombre=document.getElementById('cli-nombre').value.trim();if(!nombre){alert('Ingresá el nombre');return;}
-  const data={nombre,profId:parseInt(document.getElementById('cli-tipo').value),tel:document.getElementById('cli-tel').value,email:document.getElementById('cli-email').value,dir:document.getElementById('cli-dir').value,cuit:document.getElementById('cli-cuit').value,notas:document.getElementById('cli-notas').value};
-  if(editingClienteId){
-    const idx=clientes.findIndex(x=>x.id===editingClienteId);
-    if(idx>=0)clientes[idx]={...clientes[idx],...data};
-  } else {
-    clientes.push({id:Date.now(),...data});
-  }
-  scheduleSave();closeModal('modal-cliente');renderClientes();
-}
 
-// ══════════════════════════════════════════════
-// MODAL USUARIO
-// ══════════════════════════════════════════════
-function openModalUsuario(id){
-  editingUsuarioId=id||null;
-  const u=id?usuarios.find(x=>x.id===id):null;
-  document.getElementById('usr-modal-title').innerHTML=(u?'Editar':'Nuevo')+' usuario <button class="modal-close" onclick="closeModal(\'modal-usuario\')"><i class="ti ti-x"></i></button>';
-  document.getElementById('usr-save-btn').textContent=u?'Guardar cambios':'Crear usuario';
-  if(u){
-    document.getElementById('usr-nombre').value=u.nombre;
-    document.getElementById('usr-rol').value=u.rol;
-    document.getElementById('usr-pin').value='';
-    document.getElementById('usr-tel').value=u.tel||'';
-    document.getElementById('usr-cbg').value=u.cbg;
-    document.getElementById('usr-ctx').value=u.ctx;
-    document.querySelectorAll('.color-opt').forEach(el=>el.style.opacity=el.dataset.bg===u.cbg?'1':'.5');
-    if(u.perms){
-      document.getElementById('perm-solo-casos').classList.toggle('on',!!u.perms.soloCasos);
-      document.getElementById('perm-crear-casos').classList.toggle('on',!!u.perms.crearCasos);
-      document.getElementById('perm-ver-clientes').classList.toggle('on',!!u.perms.verClientes);
-      document.getElementById('perm-editar-tramites').classList.toggle('on',u.perms.editarTramites!==false);
-      document.getElementById('perm-ok-tramites').classList.toggle('on',u.perms.okTramites!==false);
-    }
-  } else {
-    ['usr-nombre','usr-pin','usr-tel'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-    document.getElementById('usr-rol').value='empleado';
-    document.getElementById('perm-solo-casos').classList.add('on');
-    document.getElementById('perm-crear-casos').classList.add('on');
-    document.getElementById('perm-ver-clientes').classList.add('on');
-    document.getElementById('perm-editar-tramites').classList.add('on');
-    document.getElementById('perm-ok-tramites').classList.add('on');
-  }
-  const isEmp=document.getElementById('usr-rol').value==='empleado';
-  document.getElementById('usr-perms-section').style.display=isEmp?'block':'none';
-  document.getElementById('usr-rol').onchange=function(){document.getElementById('usr-perms-section').style.display=this.value==='empleado'?'block':'none';};
-  openModal('modal-usuario');
-}
-function saveUsuario(){
-  const nombre=document.getElementById('usr-nombre').value.trim();if(!nombre){alert('Ingresá el nombre');return;}
-  const pin=document.getElementById('usr-pin').value;
-  const perms={soloCasos:document.getElementById('perm-solo-casos').classList.contains('on'),crearCasos:document.getElementById('perm-crear-casos').classList.contains('on'),verClientes:document.getElementById('perm-ver-clientes').classList.contains('on'),editarTramites:document.getElementById('perm-editar-tramites').classList.contains('on'),okTramites:document.getElementById('perm-ok-tramites').classList.contains('on')};
-  const data={nombre,rol:document.getElementById('usr-rol').value,tel:document.getElementById('usr-tel').value,cbg:document.getElementById('usr-cbg').value,ctx:document.getElementById('usr-ctx').value,perms};
-  if(pin){if(pin.length!==4||!/^\d{4}$/.test(pin)){alert('El PIN debe ser de 4 dígitos numéricos');return;}data.pin=pin;}
-  if(editingUsuarioId){
-    const idx=usuarios.findIndex(x=>x.id===editingUsuarioId);
-    if(idx>=0)usuarios[idx]={...usuarios[idx],...data};
-  } else {
-    if(!pin){alert('El PIN es obligatorio para usuarios nuevos');return;}
-    usuarios.push({id:Date.now(),...data});
-  }
-  scheduleSave();closeModal('modal-usuario');renderAdmin();
-}
-function delUsuario(id){
-  if(id===currentUser.id){alert('No podés eliminar tu propio usuario.');return;}
-  const u=usuarios.find(x=>x.id===id);
-  if(u?.rol==='admin'&&usuarios.filter(x=>x.rol==='admin').length<=1){alert('No podés eliminar el único administrador.');return;}
-  if(!confirm('¿Eliminar este usuario?'))return;
-  usuarios=usuarios.filter(u=>u.id!==id);scheduleSave();renderAdmin();
-}
-
-// ══════════════════════════════════════════════
-// CAMBIAR PIN
-// ══════════════════════════════════════════════
-function showChangePinModal(){document.getElementById('user-menu').classList.remove('show');openModal('modal-pin');}
-function changePin(){
-  const actual=document.getElementById('pin-actual').value;
-  const nuevo=document.getElementById('pin-nuevo').value;
-  const nuevo2=document.getElementById('pin-nuevo2').value;
-  if(actual!==currentUser.pin){alert('PIN actual incorrecto');return;}
-  if(nuevo.length!==4||!/^\d{4}$/.test(nuevo)){alert('El PIN nuevo debe tener 4 dígitos');return;}
-  if(nuevo!==nuevo2){alert('Los PINs nuevos no coinciden');return;}
-  const idx=usuarios.findIndex(u=>u.id===currentUser.id);
-  if(idx>=0){usuarios[idx].pin=nuevo;currentUser.pin=nuevo;}
-  scheduleSave();closeModal('modal-pin');
-  alert('PIN cambiado correctamente');
-}
-
-function selColor(el){document.querySelectorAll('.color-opt').forEach(e=>e.style.opacity='.5');el.style.opacity='1';document.getElementById('usr-cbg').value=el.dataset.bg;document.getElementById('usr-ctx').value=el.dataset.tx;}
-function openModal(id){document.getElementById(id).classList.add('show');}
-function closeModal(id){document.getElementById(id).classList.remove('show');}
-
-// ══════════════════════════════════════════════
-// PWA + SERVICE WORKER
-// ══════════════════════════════════════════════
-// Desinstalar cualquier Service Worker previo que pueda cachear versiones viejas
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(reg=>reg.unregister());
-  });
-  caches.keys().then(keys=>{
-    keys.forEach(key=>caches.delete(key));
-  });
-}
-
-// ══════════════════════════════════════════════
-// INIT — cargar Firebase y arrancar
-// ══════════════════════════════════════════════
-async function initApp(){
-  // Mostrar spinner de carga sin romper el DOM
-  const usrScreen=document.getElementById('screen-users');
-  const usrList=document.getElementById('user-list');
-  if(usrScreen)usrScreen.style.display='flex';
-  if(usrList)usrList.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px"><div class="spinner"></div><div style="font-size:13px;color:var(--text2)">Conectando con Firebase...</div></div>`;
-
-  // Cargar datos de Firestore (con fallback a local si no hay internet)
-  await loadFromFirestore();
-
-  // Iniciar sincronización en tiempo real
-  startRealtimeSync();
-  startNotifSync();
-
-  // Renderizar lista de usuarios
-  renderUserList();
-
-  // Restaurar sesión
-  const sess=ld('gp_session',null);
-  if(sess&&sess.userId){
-    const u=usuarios.find(x=>x.id===sess.userId);
-    if(u){currentUser=u;showApp();}
-  }
-}
-
-// Esperar DOM completo
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',initApp);}else{initApp();}
-</script>
-</body>
-</html>
