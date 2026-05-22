@@ -304,7 +304,7 @@ textarea.form-input{font-family:'DM Sans',sans-serif;font-size:14px}
       <label class="form-label">2. Profesional</label>
       <div style="position:relative">
         <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none"></i>
-        <input class="form-input" id="caso-prof-search" placeholder="Buscar profesional..." oninput="filtrarProfsPorBusqueda()" style="padding-left:34px" autocomplete="off">
+        <input class="form-input" id="caso-prof-search" placeholder="Buscar profesional..." oninput="filtrarClientesPorBusqueda()" style="padding-left:34px" autocomplete="off">
       </div>
       <div id="caso-prof-lista" style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;max-height:150px;overflow-y:auto;margin-top:6px;display:none"></div>
       <input type="hidden" id="caso-prof-id">
@@ -607,13 +607,13 @@ function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 let saveTimer=null;
 async function scheduleSave(){
   // Guardar en localStorage inmediatamente (para offline)
-  sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
+  sv('gp_data',{cases,clientes,usuarios,categorias,presetsTramites,notificaciones});
   // Guardar en Firestore con debounce 800ms
   if(saveTimer)clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>saveToFirestore(),800);
 }
 async function saveNotifs(){
-  sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
+  sv('gp_data',{cases,clientes,usuarios,categorias,presetsTramites,notificaciones});
   await saveToFirestore();
 }
 
@@ -621,7 +621,7 @@ async function saveToFirestore(){
   try{
     setSyncStatus('syncing');
     await db.collection('gestorpro').doc('data').set({
-      cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,
+      cases,clientes,usuarios,categorias,presetsTramites,
       updatedAt:new Date().toISOString()
     });
     lastSavedAt=new Date().toISOString();
@@ -638,23 +638,32 @@ async function loadFromFirestore(){
     if(snap.exists){
       const d=snap.data();
       if(d.usuarios)usuarios=d.usuarios;
-      if(d.tiposProfesional)tiposProfesional=d.tiposProfesional;
-      if(d.profesionales)profesionales=d.profesionales;
-      else if(d.profesionalesPersonas)profesionales=d.profesionalesPersonas;
+      if(d.categorias)categorias=d.categorias;
+      else if(d.tiposProfesional)categorias=d.tiposProfesional;
+      if(d.clientes&&Array.isArray(d.clientes)){
+        // Migrar clientes viejos (profId→catId)
+        clientes=d.clientes.map(cl=>({...cl,catId:cl.catId||cl.tipoId||cl.profId||1}));
+      }
       if(d.presetsTramites)presetsTramites=d.presetsTramites;
-      if(d.cases){cases=d.cases;migrarCasos();}
-      if(d.clientes)clientes=d.clientes;
-      sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
+      if(d.cases){cases=d.cases.map(cs=>({...cs,
+        clienteId:cs.clienteId||cs.profId||null,
+        nombre:cs.nombre||'',
+      }));migrarCasos();}
+      sv('gp_data',{cases,clientes,usuarios,categorias,presetsTramites,notificaciones});
     }
   }catch(e){
     console.warn('Sin conexión, usando datos locales:',e);
   }
 }
-// Migrar casos viejos que no tienen campo nombre
+// Migrar casos viejos
 function migrarCasos(){
   let changed=false;
   cases.forEach(c=>{
-    if(!c.nombre){c.nombre=c.cliente;changed=true;}
+    // Si no tiene nombre, lo dejamos vacío para que caseTitulo use cliente
+    // NO copiamos cliente a nombre para poder distinguirlos
+    if(c.nombre===undefined)c.nombre='';
+    // Si tiene tipoId pero profId apunta a un tipo (no persona), limpiar
+    changed=true;
   });
   if(changed)scheduleSave();
 }
@@ -669,13 +678,12 @@ function startRealtimeSync(){
     if(remoteTime===lastSavedAt)return;
     lastSavedAt=remoteTime;
     if(d.usuarios)usuarios=d.usuarios;
-    if(d.tiposProfesional)tiposProfesional=d.tiposProfesional;
-    if(d.profesionales)profesionales=d.profesionales;
-    else if(d.profesionalesPersonas)profesionales=d.profesionalesPersonas;
+    if(d.categorias)categorias=d.categorias;
+    else if(d.tiposProfesional)categorias=d.tiposProfesional;
+    if(d.clientes&&Array.isArray(d.clientes))clientes=d.clientes.map(cl=>({...cl,catId:cl.catId||cl.tipoId||cl.profId||1}));
     if(d.presetsTramites)presetsTramites=d.presetsTramites;
-    if(d.cases)cases=d.cases;
-    if(d.clientes)clientes=d.clientes;
-    sv('gp_data',{cases,clientes,usuarios,tiposProfesional,profesionales,presetsTramites,notificaciones});
+    if(d.cases)cases=d.cases.map(cs=>({...cs,clienteId:cs.clienteId||cs.profId||null,nombre:cs.nombre||''}));
+    sv('gp_data',{cases,clientes,usuarios,categorias,presetsTramites,notificaciones});
     // Actualizar UI si está logueado
     if(currentUser){
       // Actualizar currentUser con datos frescos
@@ -733,17 +741,18 @@ let usuarios = data?.usuarios || [
   {id:4,nombre:"Sofía R.",rol:"empleado",pin:"0000",cbg:"#1A2E0A",ctx:"#7EE787",perms:{soloCasos:true,crearCasos:true,verClientes:true,editarTramites:true,okTramites:true}},
 ];
 
-// tiposProfesional = categorías (agrimensor, abogado, escribano)
-let tiposProfesional = data?.tiposProfesional || data?.profesionales || [
+// categorias = tipos de cliente (Agrimensor, Abogado, Escribano)
+let categorias = data?.categorias || data?.tiposProfesional || data?.profesionales?.filter(p=>p.icon) || [
   {id:1,nombre:"Agrimensor",icon:"ti-map",colorClass:"agrim"},
   {id:2,nombre:"Abogado",icon:"ti-scale",colorClass:"abog"},
   {id:3,nombre:"Escribano",icon:"ti-license",colorClass:"escrib"},
 ];
-// profesionales = personas reales con sus datos
-let profesionales = data?.profesionalesPersonas || [
-  {id:101,nombre:"Eduardo Mora",tipoId:1,cuil:"",matricula:"",registro:"",cuentas:[]},
-  {id:102,nombre:"Fernanda Gomez de Yapur",tipoId:3,cuil:"",matricula:"",registro:"",cuentas:[]},
-  {id:103,nombre:"Juanfra Mora",tipoId:1,cuil:"",matricula:"",registro:"",cuentas:[]},
+
+// clientes = personas/estudios con quienes trabaja la empresa (con ficha completa)
+let clientes = data?.clientes || data?.profesionalesPersonas || data?.profesionales?.filter(p=>!p.icon) || [
+  {id:101,nombre:"Eduardo Mora",catId:1,cuil:"",matricula:"",registro:"",tel:"",email:"",dir:"",cuentas:[],notas:""},
+  {id:102,nombre:"Fernanda Gomez de Yapur",catId:3,cuil:"",matricula:"",registro:"",tel:"",email:"",dir:"",cuentas:[],notas:""},
+  {id:103,nombre:"Juanfra Mora",catId:1,cuil:"",matricula:"",registro:"",tel:"",email:"",dir:"",cuentas:[],notas:""},
 ];
 
 let presetsTramites = data?.presetsTramites || {
@@ -792,11 +801,7 @@ let editingUsuarioId = null;
 // ══════════════════════════════════════════════
 // DEFAULT DATA
 // ══════════════════════════════════════════════
-function defClientes(){return[
-  {id:1,nombre:"Escribanía Morales",profId:3,tel:"",email:"",dir:"",cuit:"",notas:""},
-  {id:2,nombre:"Estudio Suárez",profId:2,tel:"",email:"",dir:"",cuit:"",notas:""},
-  {id:3,nombre:"Roberto Fernández",profId:1,tel:"",email:"",dir:"",cuit:"",notas:""},
-]}
+function defClientes(){return[];}  // Clientes se cargan desde Firebase o se agregan manualmente
 function defCases(){
   const t=hoy();
   return[
@@ -823,27 +828,47 @@ function hoy(){return new Date().toISOString().split('T')[0];}
 function masD(d,n){const dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().split('T')[0];}
 function dleft(d){return d?Math.ceil((new Date(d)-new Date())/86400000):null;}
 function ini(n){return n.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
-function getTipo(id){return tiposProfesional.find(t=>t.id===id)||{nombre:'?',icon:'ti-file',colorClass:'otro'};}
-function getProf(id){return tiposProfesional.find(p=>p.id===id)||{nombre:'?',icon:'ti-file',colorClass:'otro'};}
-function getProfPersona(id){return profesionales.find(p=>p.id===id)||null;}
-function getProfPersonasByTipo(tipoId){return profesionales.filter(p=>p.tipoId===tipoId);}
+function getCat(id){return categorias.find(t=>t.id===id)||{nombre:'?',icon:'ti-file',colorClass:'otro'};}
+function getCliente(id){
+  const cl=clientes.find(x=>x.id===id);
+  if(!cl)return{nombre:'?',icon:'ti-file',colorClass:'otro',catId:1};
+  const cat=getCat(cl.catId||cl.tipoId)||{icon:'ti-file',colorClass:'otro'};
+  return{...cl,icon:cat.icon,colorClass:cat.colorClass,nombreCat:cat.nombre};
+}
+function getClientesByCat(catId){return clientes.filter(x=>x.catId===catId||x.tipoId===catId);}
+function getTipo(id){return getCat(id);}
+function getProf(id){const cl=getCliente(id);return cl.nombre!=='?'?cl:getCat(id);}
+function getProfPersona(id){return clientes.find(x=>x.id===id)||null;}
+function getProfPersonasByTipo(catId){return getClientesByCat(catId);}
 function getUser(id){return usuarios.find(u=>u.id===id)||{nombre:'?',cbg:'#222',ctx:'#888'};}
 function elabel(e){return{nuevo:'Nuevo',proceso:'En proceso',espera:'En espera',listo:'Completado',urgente:'Urgente'}[e]||e;}
 function freqLabel(f){return({1:'Diaria',2:'Cada 2d',3:'Cada 3d',7:'Semanal',14:'Quincenal'}[f]||`Cada ${f}d`);}
 // Título principal del caso: nombreCaso - cliente — profesional (notas)
 function caseTitulo(cas){
-  const tipo=getProf(cas.tipoId||cas.profId);
-  const profPersona=getProfPersona(cas.profId);
-  const nombreCaso=cas.nombre||cas.cliente||'Sin nombre';
-  const profNombre=profPersona?profPersona.nombre:(cas.cliente||'');
-  const naturaleza=cas.notas?` <span style="font-size:11px;color:var(--text3);font-weight:400">(${cas.notas})</span>`:'';
-  return `${nombreCaso} <span style="font-weight:400;color:var(--text2)">— ${profNombre}</span>${naturaleza}`;
+  // Nombre del caso (ej: "García")
+  const nombre = cas.nombre && cas.nombre.trim() ? cas.nombre.trim() : '';
+  
+  // Cliente (ej: "Eduardo Mora")
+  const clienteObj = getCliente(cas.clienteId||cas.profId);
+  const clienteNombre = clienteObj.nombre !== '?' ? clienteObj.nombre : (cas.cliente||'');
+  
+  // Naturaleza del trabajo (ej: "Fraccionamiento")
+  const naturaleza = cas.notas 
+    ? ` <span style="font-size:11px;color:var(--text3);font-weight:400;font-style:italic">(${cas.notas})</span>` 
+    : '';
+
+  // Si hay nombre del caso: "García — Eduardo Mora (Fraccionamiento)"
+  if(nombre && nombre !== clienteNombre){
+    return `${nombre} <span style="font-weight:400;color:var(--text2);font-size:12px">— ${clienteNombre}</span>${naturaleza}`;
+  }
+  // Si no hay nombre: "Eduardo Mora (Fraccionamiento)"  
+  return `${clienteNombre}${naturaleza}`;
 }
-// Línea secundaria: tipo profesional · trámites aplicables
+
 function caseSubline(cas){
-  const tipo=getProf(cas.tipoId||cas.profId);
   const tramites=cas.tramites.filter(t=>t.aplica).map(t=>t.name).join(' · ')||'Sin trámites';
-  return `${tipo.nombre} · ${tramites}`;
+  const cat=getCat(cas.tipoId||getCliente(cas.clienteId||cas.profId)?.catId);
+  return `${cat.nombre} · ${tramites}`;
 }
 
 function prog(c){
@@ -1242,10 +1267,10 @@ function renderAdmin(){
   h+=`</div>`;
 
   // — PROFESIONALES PERSONAS —
-  h+=`<div class="section-label">Profesionales</div><div class="card"><div class="card-header"><span class="card-title">Profesionales cargados (${profesionales.length})</span><button onclick="openModalProfPersona()" style="background:var(--green);border:none;border-radius:8px;padding:4px 12px;font-size:12px;color:#fff;font-family:'DM Sans',sans-serif;cursor:pointer">+ Agregar</button></div>`;
+  h+=`<div class="section-label">Profesionales</div><div class="card"><div class="card-header"><span class="card-title">Clientes cargados (${clientes.length})</span><button onclick="openModalCliente()" style="background:var(--green);border:none;border-radius:8px;padding:4px 12px;font-size:12px;color:#fff;font-family:'DM Sans',sans-serif;cursor:pointer">+ Agregar</button></div>`;
   // Agrupar por tipo
-  tiposProfesional.forEach(tipo=>{
-    const lista=profesionales.filter(p=>p.tipoId===tipo.id);
+  categorias.forEach(tipo=>{
+    const lista=clientes.filter(p=>p.catId===tipo.id);
     if(!lista.length)return;
     h+=`<div style="padding:6px 14px 2px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border2)">${tipo.nombre}s (${lista.length})</div>`;
     lista.forEach(p=>{
@@ -1256,7 +1281,7 @@ function renderAdmin(){
           <div class="admin-item-sub">${p.matricula?'Mat: '+p.matricula+' · ':''}${p.cuil?'CUIL: '+p.cuil+' · ':''}${(p.cuentas||[]).length} cuenta${(p.cuentas||[]).length!==1?'s':''}</div>
         </div>
         <div class="admin-actions">
-          <button class="btn-icon" onclick="openModalProfPersona(${p.id})" title="Editar"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon" onclick="openModalCliente(p.id)" title="Editar"><i class="ti ti-pencil"></i></button>
           <button class="btn-icon del" onclick="delProfPersona(${p.id})" title="Eliminar"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
@@ -1274,7 +1299,7 @@ function renderAdmin(){
 
   // — TRAMITES PREDEFINIDOS POR PROFESIONAL —
   h+=`<div class="section-label">Trámites predefinidos</div>`;
-  profesionales.forEach(p=>{
+  categorias.forEach(p=>{
     const list=presetsTramites[p.id]||[];
     h+=`<div class="card" style="margin-bottom:8px"><div class="card-header"><div class="ci ci-${p.colorClass}" style="width:22px;height:22px;border-radius:5px;font-size:12px"><i class="ti ${p.icon}"></i></div><span class="card-title">${p.nombre}</span></div>`;
     list.forEach((t,i)=>{
@@ -1306,16 +1331,16 @@ function addProfesional(){
   const icons=['ti-map','ti-scale','ti-license','ti-file','ti-building','ti-user'];
   const colors=['agrim','abog','escrib','otro'];
   const id=Date.now();
-  profesionales.push({id,nombre:name,icon:icons[profesionales.length%icons.length],colorClass:colors[profesionales.length%colors.length]});
+  categorias.push({id,nombre:name,icon:icons[categorias.length%icons.length],colorClass:colors[categorias.length%colors.length]});
   presetsTramites[id]=[];
   if(inp)inp.value='';
   scheduleSave();renderAdmin();
 }
 function delProfesional(id){
-  const enUso=cases.some(c=>c.tipoId===id);
-  if(enUso){alert('No se puede eliminar: hay casos usando este tipo de profesional.');return;}
-  if(!confirm('¿Eliminar este tipo de profesional?'))return;
-  tiposProfesional=tiposProfesional.filter(p=>p.id!==id);
+  const enUso=cases.some(c=>c.catId===id||c.tipoId===id);
+  if(enUso){alert('No se puede eliminar: hay casos usando esta categoría.');return;}
+  if(!confirm('¿Eliminar esta categoría?'))return;
+  categorias=categorias.filter(p=>p.id!==id);
   delete presetsTramites[id];
   scheduleSave();renderAdmin();
 }
@@ -1324,12 +1349,14 @@ function delProfesional(id){
 let editingProfPersonaId=null;
 let ppCuentasTemp=[];
 
-function openModalProfPersona(id){
+function openModalCliente(id){
   editingProfPersonaId=id||null;
-  const pp=id?profesionales.find(x=>x.id===id):null;
+  id=id||null;
+  editingClienteId=id;
+  const pp=id?clientes.find(x=>x.id===id):null;
   document.getElementById('prof-modal-title').innerHTML=(pp?'Editar':'Nuevo')+' profesional <button class="modal-close" onclick="closeModal('modal-prof-persona')"><i class="ti ti-x"></i></button>';
   document.getElementById('pp-save-btn').textContent=pp?'Guardar cambios':'Agregar profesional';
-  document.getElementById('pp-tipo').innerHTML=tiposProfesional.map(t=>`<option value="${t.id}"${pp&&pp.tipoId===t.id?' selected':''}>${t.nombre}</option>`).join('');
+  document.getElementById('pp-tipo').innerHTML=categorias.map(t=>`<option value="${t.id}"${pp&&(pp.catId||pp.tipoId)===t.id?' selected':''}>${t.nombre}</option>`).join('');
   document.getElementById('pp-nombre').value=pp?.nombre||'';
   document.getElementById('pp-cuil').value=pp?.cuil||'';
   document.getElementById('pp-matricula').value=pp?.matricula||'';
@@ -1360,31 +1387,33 @@ function addCuentaPP(){
   renderCuentasPP();
 }
 
-function saveProfPersona(){
+function saveCliente_pp(){
   const nombre=document.getElementById('pp-nombre').value.trim();
   if(!nombre){alert('Ingresá el nombre');return;}
-  const tipoId=parseInt(document.getElementById('pp-tipo').value);
-  const data={nombre,tipoId,cuil:document.getElementById('pp-cuil').value,
+  const catId=parseInt(document.getElementById('pp-tipo').value);
+  const data={nombre,catId,cuil:document.getElementById('pp-cuil').value,
     matricula:document.getElementById('pp-matricula').value,
     registro:document.getElementById('pp-registro').value,
     tel:document.getElementById('pp-tel').value,
     email:document.getElementById('pp-email').value,
     notas:document.getElementById('pp-notas').value,
     cuentas:[...ppCuentasTemp]};
-  if(editingProfPersonaId){
-    const idx=profesionales.findIndex(x=>x.id===editingProfPersonaId);
-    if(idx>=0)profesionales[idx]={...profesionales[idx],...data};
+  const eid=editingClienteId||editingProfPersonaId;
+  if(eid){
+    const idx=clientes.findIndex(x=>x.id===eid);
+    if(idx>=0)clientes[idx]={...clientes[idx],...data};
   } else {
-    profesionales.push({id:Date.now(),...data});
+    clientes.push({id:Date.now(),...data});
   }
   scheduleSave();closeModal('modal-prof-persona');renderAdmin();
 }
+function saveProfPersona(){saveCliente_pp();}
 
 function delProfPersona(id){
-  const enUso=cases.some(c=>c.profId===id);
-  if(enUso){alert('No se puede eliminar: hay casos asociados a este profesional.');return;}
-  if(!confirm('¿Eliminar este profesional?'))return;
-  profesionales=profesionales.filter(p=>p.id!==id);
+  const enUso=cases.some(c=>c.clienteId===id||c.profId===id);
+  if(enUso){alert('No se puede eliminar: hay casos asociados a este cliente.');return;}
+  if(!confirm('¿Eliminar este cliente?'))return;
+  clientes=clientes.filter(p=>p.id!==id);
   scheduleSave();renderAdmin();
 }
 function editProfNombre(id){
@@ -1749,8 +1778,8 @@ function saveTramite(){
 function openModalCaso(prefillProf){
   // Poblar tipos de profesional
   const tipSel = document.getElementById('caso-tipo-prof');
-  tipSel.innerHTML = '<option value="">— Seleccioná el tipo —</option>' +
-    tiposProfesional.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('');
+  tipSel.innerHTML = '<option value="">— Seleccioná la categoría —</option>' +
+    categorias.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('');
 
   // Poblar empleados
   document.getElementById('caso-emp').innerHTML = usuarios.map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('');
@@ -1784,51 +1813,52 @@ function openModalCaso(prefillProf){
   openModal('modal-caso');
 }
 
-function filtrarProfsPorTipo(){
-  const tipoId = parseInt(document.getElementById('caso-tipo-prof').value);
+function filtrarClientesPorCat(){
+  const catId = parseInt(document.getElementById('caso-tipo-prof').value)||0;
   document.getElementById('caso-prof-search').value='';
   document.getElementById('caso-prof-id').value='';
   document.getElementById('caso-prof-seleccionado').style.display='none';
   document.getElementById('caso-prof-lista').style.display='none';
-  // Actualizar presets de trámites
   updatePreset();
 }
 
-function filtrarProfsPorBusqueda(){
-  const tipoId = parseInt(document.getElementById('caso-tipo-prof').value);
+function filtrarClientesPorBusqueda(){
+  const catId = parseInt(document.getElementById('caso-tipo-prof').value)||0;
   const q = document.getElementById('caso-prof-search').value.toLowerCase().trim();
   const lista = document.getElementById('caso-prof-lista');
+  if(!q&&!catId){lista.style.display='none';return;}
 
-  let profs = profesionales;
-  if(tipoId) profs = profs.filter(p=>p.tipoId===tipoId);
-  if(q) profs = profs.filter(p=>p.nombre.toLowerCase().includes(q));
+  let clis = [...clientes];
+  if(catId) clis = clis.filter(cl=>cl.catId===catId);
+  if(q) clis = clis.filter(cl=>cl.nombre.toLowerCase().includes(q));
 
-  if(!profs.length){
-    lista.innerHTML='<div style="padding:10px 14px;font-size:13px;color:var(--text3)">Sin resultados</div>';
+  if(!clis.length){
+    lista.innerHTML='<div style="padding:10px 14px;font-size:13px;color:var(--text3)">Sin resultados. Podés agregar este cliente desde el panel Admin.</div>';
     lista.style.display='block';
     return;
   }
-  lista.innerHTML = profs.map(p=>{
-    const tipo = tiposProfesional.find(t=>t.id===p.tipoId);
-    return `<div onclick="seleccionarProf(${JSON.stringify({id:p.id,nombre:p.nombre,tipoId:p.tipoId}).replace(/"/g,'&quot;')})"
+  lista.innerHTML = clis.map(cl=>{
+    const cat = getCat(cl.catId);
+    const safe = JSON.stringify({id:cl.id,nombre:cl.nombre,catId:cl.catId}).replace(/"/g,'&quot;');
+    return `<div onclick="seleccionarCliente(${safe})"
       style="padding:10px 14px;border-bottom:1px solid var(--border2);cursor:pointer;font-size:13px;color:var(--text)"
       onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
-      <div style="font-weight:500">${p.nombre}</div>
-      <div style="font-size:11px;color:var(--text2)">${tipo?tipo.nombre:''}</div>
+      <div style="font-weight:500">${cl.nombre}</div>
+      <div style="font-size:11px;color:var(--text2)">${cat.nombre}${cl.matricula?' · Mat: '+cl.matricula:''}</div>
     </div>`;
   }).join('');
   lista.style.display='block';
 }
 
-function seleccionarProf(prof){
+function seleccionarCliente(prof){
   if(typeof prof === 'string') prof = JSON.parse(prof);
   document.getElementById('caso-prof-id').value = prof.id;
   document.getElementById('caso-prof-sel-nombre').textContent = prof.nombre;
   document.getElementById('caso-prof-seleccionado').style.display = 'flex';
   document.getElementById('caso-prof-search').value = '';
   document.getElementById('caso-prof-lista').style.display = 'none';
-  // Actualizar tipo si no estaba seleccionado
-  if(prof.tipoId) document.getElementById('caso-tipo-prof').value = prof.tipoId;
+  // Actualizar categoría si no estaba seleccionada
+  if(prof.catId) document.getElementById('caso-tipo-prof').value = prof.catId;
   updatePreset();
 }
 
@@ -1842,10 +1872,9 @@ function limpiarProfSeleccionado(){
 
 function openModalCasoFor(nombre){openModalCaso(nombre);}
 function updatePreset(){
-  const tipoId = parseInt(document.getElementById('caso-tipo-prof')?.value||
-    document.getElementById('caso-prof-id')?.value&&
-    (profesionales.find(p=>p.id===parseInt(document.getElementById('caso-prof-id').value))?.tipoId)||0);
-  const list=[...(presetsTramites[tipoId]||[]),...customPresets];
+  const catId = parseInt(document.getElementById('caso-tipo-prof')?.value) ||
+    (()=>{const pid=parseInt(document.getElementById('caso-prof-id')?.value);return pid?getCliente(pid)?.catId:0;})() || 0;
+  const list=[...(presetsTramites[catId]||[]),...customPresets];
   document.getElementById('preset-checks').innerHTML=list.map((t,i)=>`
     <div class="preset-item"><input type="checkbox" id="pc${i}" ${i<2?'checked':''}><label for="pc${i}">${t.name}${t.nota?` <span style="font-size:10px;color:var(--amber-text);background:var(--amber-dim);padding:1px 6px;border-radius:20px;margin-left:4px">${t.nota}</span>`:''}
     <span style="font-size:10px;color:var(--text3);margin-left:4px">${t.defaultDeadlineDays?`⏰${t.defaultDeadlineDays}d`:''}${t.defaultRevision?` 🔄${freqLabel(t.defaultRevision)}`:''}
@@ -1857,16 +1886,16 @@ function addPresetCustom(){
   customPresets.push({name,defaultRevision:1});if(inp)inp.value='';updatePreset();
 }
 function createCaso(){
-  const profId = parseInt(document.getElementById('caso-prof-id').value);
-  if(!profId){alert('Seleccioná un profesional');return;}
-  const prof = profesionales.find(p=>p.id===profId);
-  if(!prof){alert('Profesional no encontrado');return;}
+  const clienteId = parseInt(document.getElementById('caso-prof-id').value);
+  if(!clienteId){alert('Seleccioná un cliente');return;}
+  const clienteObj = clientes.find(p=>p.id===clienteId);
+  if(!clienteObj){alert('Cliente no encontrado');return;}
 
   const nombre = document.getElementById('caso-nombre').value.trim();
   if(!nombre){alert('Ingresá el nombre del caso');document.getElementById('caso-nombre').focus();return;}
 
-  const tipoId = prof.tipoId;
-  const all=[...(presetsTramites[tipoId]||[]),...customPresets];
+  const catId = clienteObj.catId||1;
+  const all=[...(presetsTramites[catId]||[]),...customPresets];
   const t0=hoy();
   const tramites=all.map((t,i)=>{
     const chk=document.getElementById('pc'+i);
@@ -1877,10 +1906,11 @@ function createCaso(){
 
   const nc={
     id:Date.now(),
-    nombre,                          // nombre del caso (ej: García)
-    profId,                          // ID del profesional persona
-    tipoId,                          // ID del tipo (agrimensor etc)
-    cliente:prof.nombre,             // nombre del profesional
+    nombre,                           // nombre del caso (ej: "García")
+    clienteId,                        // ID del cliente (profesional)
+    catId,                            // ID de categoría (Agrimensor etc)
+    cliente:clienteObj.nombre,        // nombre para display/compatibilidad
+    profId:clienteId,                 // alias para compatibilidad
     empleadoId:parseInt(document.getElementById('caso-emp').value),
     estado:document.getElementById('caso-estado').value,
     fecha:document.getElementById('caso-fecha').value,
